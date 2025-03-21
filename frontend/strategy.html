@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Strategies</title>
+    <link rel="stylesheet" href="./css/base.css">
+    <link rel="stylesheet" href="./css/strategies.css">
+</head>
+
+<body>
+    <!-- Header -->
+    <header>
+        <h1>Trading Strategies</h1>
+        <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+        <!-- Core DataTables -->
+        <link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.11.5/css/jquery.dataTables.min.css">
+        <script type="text/javascript" src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+
+        <!-- Responsive extension -->
+        <link rel="stylesheet" type="text/css"
+            href="https://cdn.datatables.net/responsive/2.2.9/css/responsive.dataTables.min.css">
+        <script type="text/javascript"
+            src="https://cdn.datatables.net/responsive/2.2.9/js/dataTables.responsive.min.js"></script>
+
+        <!-- DataTables Date Range Plugin -->
+        <link rel="stylesheet" type="text/css"
+            href="https://cdn.datatables.net/datetime/1.1.2/css/dataTables.dateTime.min.css">
+        <script type="text/javascript"
+            src="https://cdn.datatables.net/datetime/1.1.2/js/dataTables.dateTime.min.js"></script>
+        <script type="text/javascript"
+            src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.29.2/moment.min.js"></script>
+    </header>
+
+    <div class="container">
+        <!-- Left Sidebar (same as index.html) -->
+        <div class="sibebar-container" , id="sidebar-container"></div>
+
+        <!-- Middle Section (specific to strategies) -->
+        <div class="options-container">
+            <h3>Strategies</h3>
+            <div id="options">
+                <!-- Data container moved inside options -->
+                <div id="data-container">
+                    <!-- Date range controls -->
+                    <div class="date-controls">
+                        <div>
+                            <label for="min">Start Date:</label>
+                            <input type="text" id="min" name="min">
+                        </div>
+                        <div>
+                            <label for="max">End Date:</label>
+                            <input type="text" id="max" name="max">
+                        </div>
+                    </div>
+
+                    <!-- The table that DataTables will enhance -->
+                    <table id="strategy-table" class="display" style="width:100%">
+                        <thead>
+                            <!-- Headers will be dynamically generated -->
+                        </thead>
+                        <tbody>
+                            <!-- Data rows will be dynamically generated -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <script type="module">
+            import { renderStrategyTable } from './js/db_records.js';
+
+            document.addEventListener('DOMContentLoaded', () => {
+                renderStrategyTable('data-container');
+            });
+        </script>
+        <script>
+            $(document).ready(function () {
+                $("#sidebar-container").load("./sidebar.html");
+            });
+        </script>
+
+</body>
+
+</html>

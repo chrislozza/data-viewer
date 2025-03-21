@@ -1,0 +1,39 @@
+/* Options area */
+.options-container {
+    background-color: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 1rem;
+}
+
+#data-container {
+    width: 100%;
+    overflow-x: auto;
+}
+
+.dataTables_wrapper {
+    width: 100% !important;
+    margin: 0 auto;
+}
+
+table.dataTable {
+    width: 100% !important;
+    margin: 0 auto;
+}
+
+/* Make table responsive on smaller screens */
+@media screen and (max-width: 767px) {
+    table.dataTable>tbody>tr>td {
+        white-space: nowrap;
+    }
+
+    .dataTables_wrapper .dataTables_filter {
+        float: none;
+        text-align: center;
+    }
+
+    .dataTables_wrapper .dataTables_length {
+        float: none;
+        text-align: center;
+    }
+}

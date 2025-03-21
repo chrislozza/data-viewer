@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Trader App</title>
+    <link rel="stylesheet" href="./css/base.css">
+    <link rel="stylesheet" href="./css/dashboard.css">
+    <!-- jQuery -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+
+    <script src="./js/dashboard.js"></script>
+</head>
+
+<body>
+    <!-- Header Section -->
+    <header>
+        <h1>Trader Dashboard</h1>
+    </header>
+
+    <!-- Main Container -->
+    <div class="container">
+        <!-- Left Sidebar -->
+        <div class="sibebar-container" , id="sidebar-container"></div>
+
+
+        <!-- Main Content Area -->
+        <div class="main-content">
+            <h2>Dashboard Overview</h2>
+
+            <div class="date-controls">
+                <div class="date-control">
+                    <label for="period">Period:</label>
+                    <select id="period" name="period" , onchange="updateChartPeriod()">
+                        <option value="1">Last Month</option>
+                        <option value="6">Last 6 Months</option>
+                        <option value="12">Last Year</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Chart Area -->
+            <div class="chart-container">
+                <h3>Chart Area</h3>
+                <div id="pnlChartContainer">
+                    <canvas id="pnlChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Options Area -->
+            <div class="highlight-container">
+                <h3>Highlights</h3>
+                <!-- Middle Section (Dashboard) -->
+                <div class="main-content dashboard">
+                    <!-- Dashboard Title -->
+                    <h2>Trading Dashboard</h2>
+
+                    <!-- Dashboard Grid -->
+                    <div class="dashboard-grid">
+                        <!-- PNL Card -->
+                        <div class="dashboard-card">
+                            <h3>Total PNL</h3>
+                            <div class="metric">
+                                <span class="value" id="total-pnl">$14,327.89</span>
+                                <span class="trend positive">+2.4%</span>
+                            </div>
+                            <p class="description">Overall profit and loss</p>
+                        </div>
+
+                        <!-- Trade Count Card -->
+                        <div class="dashboard-card">
+                            <h3>Total Trades</h3>
+                            <div class="metric">
+                                <span class="value" id="total-trades">1,283</span>
+                            </div>
+                            <p class="description">Completed trades</p>
+                        </div>
+
+                        <!-- Fees Card -->
+                        <div class="dashboard-card">
+                            <h3>Commissions/Fees</h3>
+                            <div class="metric">
+                                <span class="value" id="total-fees">$892.45</span>
+                                <span class="percent">0.62%</span>
+                            </div>
+                            <p class="description">Total trading costs</p>
+                        </div>
+
+                        <!-- Win Rate Card -->
+                        <div class="dashboard-card">
+                            <h3>Win Rate</h3>
+                            <div class="metric">
+                                <span class="value" id="win-rate">67%</span>
+                            </div>
+                            <p class="description">Profitable trades percentage</p>
+                        </div>
+
+                        <!-- Watermarks Heatmap Card -->
+                        <div class="dashboard-card large">
+                            <h3>Watermark Hits</h3>
+                            <div class="heatmap" id="watermark-heatmap">
+                                <!-- Heatmap will be generated here via JavaScript -->
+                                <div class="placeholder-text">Loading watermark data...</div>
+                            </div>
+                        </div>
+
+                        <!-- Recent Activity Card -->
+                        <div class="dashboard-card large">
+                            <h3>Recent Activity</h3>
+                            <ul class="activity-list" id="recent-activity">
+                                <li class="activity-item">
+                                    <span class="time">10:45</span>
+                                    <span class="event">BTC/USD trade executed</span>
+                                    <span class="detail positive">+$127.50</span>
+                                </li>
+                                <li class="activity-item">
+                                    <span class="time">09:32</span>
+                                    <span class="event">ETH/USD watermark hit</span>
+                                    <span class="detail">Level 3</span>
+                                </li>
+                                <li class="activity-item">
+                                    <span class="time">09:15</span>
+                                    <span class="event">Strategy "Momentum-01" activated</span>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Sidebar -->
+        <div class="sidebar right" id="right-sidebar">
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        $(document).ready(function () {
+            $("#sidebar-container").load("./sidebar.html");
+        });
+    </script>
+
+    <script>
+        function updateChartPeriod() {
+            const period = document.getElementById('period').value;
+            console.log("Selected period:", period);
+
+            const today = new Date();
+            const startDate = new Date();
+            startDate.setMonth(today.getMonth() - parseInt(period));
+
+            // Format dates as YYYY-MM-DD
+            const fromDate = startDate.toISOString().split('T')[0];
+            const toDate = today.toISOString().split('T')[0];
+
+            console.log(`Date range: ${fromDate} to ${toDate}`);
+
+            // Call the update function from chart_pnl.js
+            window.updatePnlChart(fromDate, toDate);
+        }
+
+        // Initialize chart with default period when page loads
+        document.addEventListener('DOMContentLoaded', function () {
+            // Set default period (1 month)
+            setTimeout(() => updateChartPeriod(), 500);
+        });
+    </script>
+
+</body>
+
+</html>
