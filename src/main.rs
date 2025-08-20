@@ -91,14 +91,18 @@ async fn main() {
     info!("listening on {}", listener.local_addr().unwrap());
     axum::serve(listener, app).await.unwrap();
 
+    let mut is_graceful_shutdown = false;
     tokio::spawn(async move {
         loop {
             tokio::select! {
-                _ = sigterm.recv() => {
-                    cancel_token.cancel();
-                }
                 _ = cancel_token.cancelled() => {
                     break;
+                }
+                _ = sigterm.recv() => {
+                    graceful_shutdown(&mut is_graceful_shutdown, &cancel_token);
+                }
+                _ = signal::ctrl_c() => {
+                    graceful_shutdown(&mut is_graceful_shutdown, &cancel_token);
                 }
             }
         }
