@@ -13,10 +13,13 @@ pub struct Settings {
 }
 
 #[derive(Debug)]
-pub struct Config {}
+pub struct SettingsReader {}
 
-impl Config {
-    pub fn read_config_file(path: &str) -> Result<Settings> {
+impl SettingsReader {
+    pub fn read_config_file<Settings>(path: &str) -> Result<Settings>
+    where
+        Settings: for<'de> Deserialize<'de>,
+    {
         let mut file = File::open(path)?;
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;

@@ -1,0 +1,69 @@
+name: Deploy OAuth Proxy
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'oauth-proxy/**'
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v1
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+      
+      - name: Install Serverless Framework
+        run: npm install -g serverless
+      
+      - name: Create ECR repository if it doesn't exist
+        run: |
+          aws ecr describe-repositories --repository-names oauth-proxy || \
+          aws ecr create-repository --repository-name oauth-proxy
+      
+      - name: Build, tag, and push image to Amazon ECR
+        id: build-image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: oauth-proxy
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          cd oauth-proxy
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          echo "::set-output name=image::$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+      
+      - name: Deploy with Serverless Framework
+        env:
+          ECR_IMAGE_URI: ${{ steps.build-image.outputs.image }}
+          CLIENT_ID: ${{ secrets.OAUTH_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.OAUTH_CLIENT_SECRET }}
+          COOKIE_SECRET: ${{ secrets.OAUTH_COOKIE_SECRET }}
+          UPSTREAM_SERVICE: ${{ secrets.UPSTREAM_SERVICE }}
+        run: |
+          cd oauth-proxy
+          serverless deploy
+      
+      - name: Get deployment info
+        run: |
+          cd oauth-proxy
+          echo "Deployment complete! Your OAuth Proxy is now running."
+          echo "API Gateway endpoint: $(serverless info --verbose | grep 'ServiceEndpoint' | awk '{print $2}')/oauth2/"

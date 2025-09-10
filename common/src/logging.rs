@@ -1,7 +1,6 @@
 use anyhow::Result;
 use std::str::FromStr;
 use tracing::Level;
-use tracing_subscriber::prelude::*;
 
 #[derive(Debug, Clone)]
 pub struct Logging {}
