@@ -6,11 +6,15 @@ use std::collections::HashMap;
 async fn oauth_endpoints(req: Request) -> Result<Response<Body>, Error> {
     let path = req.uri().path();
 
-    match path {
-        "/authorise" => authorise(req).await,
-        "/callback" => callback(req).await,
-        _ => Ok(Response::builder().status(404).body("Not Found".into())?),
-    }
+    println!("path: {}", path);
+
+    Ok(Response::builder().status(200).body("Hello World".into())?)
+
+    // match path {
+    //     "/authorise" => authorise(req).await,
+    //     "/callback" => callback(req).await,
+    //     _ => Ok(Response::builder().status(404).body("Not Found".into())?),
+    // }
 }
 
 async fn authorise(req: Request) -> Result<Response<Body>, Error> {
@@ -31,11 +35,11 @@ async fn callback(req: Request) -> Result<Response<Body>, Error> {
     let code = params.get("code").ok_or("Missing code parameter")?;
     let state = params.get("state").ok_or("Missing state parameter")?;
 
-    verify_state(state)?;
+    // verify_state(state)?;
 
-    let tokens = exchange_code_for_tokens(code).await?;
+    // let tokens = exchange_code_for_tokens(code).await?;
 
-    store_tokens(extract_session_id(state), &tokens).await?;
+    // store_tokens(extract_session_id(state), &tokens).await?;
 
     // 5. Show success page to user
     Ok(Response::builder()
@@ -49,9 +53,9 @@ async fn exchange_code_for_tokens(code: &str) -> Result<TokenResponse, Error> {
     let params = [
         ("grant_type", "authorization_code"),
         ("code", code),
-        ("client_id", CLIENT_ID),
-        ("client_secret", CLIENT_SECRET),
-        ("redirect_uri", REDIRECT_URI),
+        // ("client_id", CLIENT_ID),
+        // ("client_secret", CLIENT_SECRET),
+        // ("redirect_uri", REDIRECT_URI),
     ];
 
     let response = client
@@ -85,8 +89,8 @@ struct TokenResponse {
     id_token: Option<String>,
 }
 
-async fn token() -> Result<impl IntoResponse, std::convert::Infallible> {
-    Response::builder().status(404).body("Not Found".into())
+async fn token() -> Result<Response<Body>, Error> {
+    Ok(Response::builder().status(404).body("Not Found".into())?)
 }
 
 #[tokio::main]

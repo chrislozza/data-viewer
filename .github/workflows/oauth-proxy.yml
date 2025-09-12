@@ -1,0 +1,96 @@
+name: Deploy Rust Lambda
+
+on:
+  push:
+    branches: [ main, oauth-proxy ]
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+
+    # Install Rust toolchain
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        target: x86_64-unknown-linux-musl
+        override: true
+        
+    # Install musl-tools for static linking
+    - name: Install musl-tools
+      run: |
+        sudo apt update
+        sudo apt install -y musl-tools
+
+    # Build the Lambda function
+    - name: Build Lambda
+      run: |
+        cargo build --release --target x86_64-unknown-linux-musl --package oauth-proxy
+        
+    # Prepare Lambda package
+    - name: Prepare Lambda package
+      run: |
+        mkdir -p lambda-package
+        cp target/x86_64-unknown-linux-musl/release/oauth-proxy lambda-package/bootstrap
+        cd lambda-package
+        zip -r ../lambda-package.zip .
+      
+    # Configure AWS credentials
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v1
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ secrets.AWS_REGION }}
+        
+    # Check if Lambda exists and update it directly if it does
+    - name: Check Lambda Function
+      id: check_lambda
+      run: |
+        if aws lambda get-function --function-name oauth-proxy &>/dev/null; then
+          echo "Lambda function exists"
+          echo "lambda_exists=true" >> $GITHUB_OUTPUT
+        else
+          echo "Lambda function doesn't exist yet"
+          echo "lambda_exists=false" >> $GITHUB_OUTPUT
+        fi
+    
+    # Update Lambda directly if it exists
+    - name: Update Lambda Function
+      if: steps.check_lambda.outputs.lambda_exists == 'true'
+      run: |
+        echo "Updating Lambda function code directly"
+        aws lambda update-function-code \
+          --function-name oauth-proxy \
+          --zip-file fileb://lambda-package.zip
+
+    # Setup Terraform
+    - name: Setup Terraform
+      if: steps.check_lambda.outputs.lambda_exists == 'false'
+      uses: hashicorp/setup-terraform@v2
+
+    # Apply Terraform if Lambda doesn't exist
+    - name: Clean Terraform State and Apply
+      if: steps.check_lambda.outputs.lambda_exists == 'false'
+      run: |
+        cd oauth-proxy/deploy
+        terraform init
+        
+        # Check if resources exist
+        ROLE_EXISTS=$(aws iam get-role --role-name oauth_proxy_lambda_role &>/dev/null && echo "true" || echo "false")
+        
+        if [ "$ROLE_EXISTS" == "true" ]; then
+          # If resources exist, import them
+          terraform import aws_iam_role.lambda_exec oauth_proxy_lambda_role || true
+          terraform import aws_cloudwatch_log_group.lambda_logs "/aws/lambda/oauth-proxy" || true
+          terraform import aws_cloudwatch_log_group.api_logs "/aws/apigateway/oauth-proxy-api" || true
+        else
+          # If resources don't exist, just apply
+          echo "Resources don't exist yet, creating them..."
+        fi
+        
+        terraform apply -auto-approve -var="lambda_package_path=../../lambda-package.zip"

@@ -17,3 +17,5 @@ target/
 #.idea/
 
 .tmp/*
+**/.terraform/*
+**/.terraform.lock.hcl
