@@ -2,7 +2,7 @@ name: Deploy Rust Lambda
 
 on:
   push:
-    branches: [ main, oauth-proxy ]
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
