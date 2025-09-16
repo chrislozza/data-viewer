@@ -1,0 +1,41 @@
+# OAuth Authentication Flow - UI Details
+
+Yes, step 4 involves a user interface (UI) provided by TastyTrade. Let me clarify the complete flow with UI details:
+
+## Step-by-Step Flow with UI Elements
+
+1. **User starts in your application UI**
+   - User clicks a "Connect to TastyTrade" button in your app
+
+2. **Your app redirects to Lambda proxy**
+   - Browser navigates to `https://your-lambda-api.amazonaws.com/authorize?session_id=abc123`
+
+3. **Lambda redirects to TastyTrade login page**
+   - Browser navigates to TastyTrade's authorization page
+   - URL: `https://my.tastytrade.com/auth.html?client_id=YOUR_ID&redirect_uri=...`
+
+4. **User interacts with TastyTrade's login UI**
+   - User sees TastyTrade's login form
+   - User enters username/password
+   - If 2FA is enabled, user enters their 2FA code
+   - User sees permissions screen showing what your app is requesting access to
+   - User clicks "Authorize" button
+
+   ![TastyTrade Auth UI example](https://tastyworks.com/wp-content/uploads/2023/05/tastyworks-login-screen-1.png)
+   (Example image - actual UI may differ)
+
+5. **TastyTrade redirects back to Lambda**
+   - After successful authentication, TastyTrade redirects the browser
+   - Browser navigates to `https://your-lambda-api.amazonaws.com/callback?code=xyz789&state=abc123`
+
+6. **Lambda processes the code (behind the scenes)**
+   - Exchanges code for tokens with TastyTrade API
+   - Stores tokens in DynamoDB
+   - Shows success page to user: "You can return to the application"
+
+7. **Your K3s app retrieves tokens**
+   - Polls Lambda endpoint for token status
+   - When available, securely retrieves tokens
+   - Uses tokens for API calls to TastyTrade
+
+The key point is that steps 3-5 happen in the user's browser, where they directly interact with TastyTrade's authentication UI. Your Lambda proxy and K3s application don't need to implement this UI - TastyTrade provides it.
