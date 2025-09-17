@@ -1,4 +1,4 @@
-name: Deploy Rust Lambda
+name: deploy oauth lambda
 
 on:
   push:
