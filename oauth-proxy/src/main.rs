@@ -1,4 +1,5 @@
 use axum::{body::Body, response::Response};
+use common::Init;
 use common::logging::StructuredLogging;
 use lambda_http::{Error, IntoResponse, Request, RequestExt, service_fn};
 use serde::Serializer;
@@ -38,7 +39,7 @@ async fn token(req: Request) -> Result<Response<Body>, Error> {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let _ = StructuredLogging::new().await;
+    let _ = Init::structured_logging();
     lambda_http::run(service_fn(oauth_endpoints)).await?;
     Ok(())
 }
