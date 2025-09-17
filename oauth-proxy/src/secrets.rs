@@ -65,6 +65,8 @@ pub(crate) async fn get_secrets(req_client_id: &str) -> Result<Secrets, Error> {
     let client_secret = get_parameters(req_client_id, &client).await?;
     let refresh_token = get_parameters(REFRESH_TOKEN, &client).await?;
 
+    info!("Got secret items for client_id {req_client_id}");
+
     Ok(Secrets::from(&[
         client_id,
         client_secret.value.unwrap(),
