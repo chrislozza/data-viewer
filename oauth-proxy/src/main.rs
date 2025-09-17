@@ -1,6 +1,7 @@
 use axum::{body::Body, response::Response};
 use common::Init;
 use common::logging::StructuredLogging;
+use lambda_http::tracing::subscriber::fmt::format;
 use lambda_http::{Error, IntoResponse, Request, RequestExt, service_fn};
 use serde::Serializer;
 use serde::{Deserialize, Serialize};
@@ -22,7 +23,13 @@ async fn oauth_endpoints(req: Request) -> Result<Response<Body>, Error> {
     match path {
         "/ping" | "/oauth/ping" => Ok(Response::builder().status(200).body("pong".into())?),
         "/token" | "/oauth/token" => token(req).await,
-        _ => Ok(Response::builder().status(404).body("Not Found".into())?),
+        _ => Ok(Response::builder().status(404).body(
+            format!(
+                "EndpointNot Found {}",
+                req.query_string_parameters().to_query_string()
+            )
+            .into(),
+        )?),
     }
 }
 
