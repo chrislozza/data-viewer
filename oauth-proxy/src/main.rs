@@ -16,8 +16,8 @@ async fn oauth_endpoints(req: Request) -> Result<Response<Body>, Error> {
 
     info!("path: {}", path);
     match path {
-        "/ping" => Ok(Response::builder().status(200).body("pong".into())?),
-        "/token" => token(req).await,
+        "ping" => Ok(Response::builder().status(200).body("pong".into())?),
+        "token" => token(req).await,
         _ => Ok(Response::builder().status(404).body("Not Found".into())?),
     }
 }
