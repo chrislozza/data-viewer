@@ -27,7 +27,11 @@ async fn token(req: Request) -> Result<Response<Body>, Error> {
     info!("Query params: {}", query_params.to_query_string());
     let client_id = match query_params.first("client_id") {
         Some(client_id) => client_id,
-        None => return Ok(Response::builder().status(404).body("Not Found".into())?),
+        None => {
+            return Ok(Response::builder()
+                .status(404)
+                .body("Client Id Not Found".into())?);
+        }
     };
 
     let secrets = match secrets::get_secrets(client_id).await {
