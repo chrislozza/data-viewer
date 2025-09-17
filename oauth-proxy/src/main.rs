@@ -14,7 +14,11 @@ async fn oauth_endpoints(req: Request) -> Result<Response<Body>, Error> {
 
     let path = req.uri().path();
 
-    info!("path: {}", path);
+    info!(
+        "path: {} query: {}",
+        path,
+        req.query_string_parameters().to_query_string()
+    );
     match path {
         "/ping" | "/oauth/ping" => Ok(Response::builder().status(200).body("pong".into())?),
         "/token" | "/oauth/token" => token(req).await,
