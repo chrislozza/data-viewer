@@ -1,4 +1,4 @@
-name: Deploy Rust Lambda
+name: deploy oauth lambda
 
 on:
   push:
@@ -47,38 +47,35 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ secrets.AWS_REGION }}
         
-    # Check if Lambda exists and update it directly if it does
-    - name: Check Lambda Function
-      id: check_lambda
-      run: |
-        if aws lambda get-function --function-name oauth-proxy &>/dev/null; then
-          echo "Lambda function exists"
-          echo "lambda_exists=true" >> $GITHUB_OUTPUT
-        else
-          echo "Lambda function doesn't exist yet"
-          echo "lambda_exists=false" >> $GITHUB_OUTPUT
-        fi
-    
-    # Update Lambda directly if it exists
-    - name: Update Lambda Function
-      if: steps.check_lambda.outputs.lambda_exists == 'true'
-      run: |
-        echo "Updating Lambda function code directly"
-        aws lambda update-function-code \
-          --function-name oauth-proxy \
-          --zip-file fileb://lambda-package.zip
-
     # Setup Terraform
     - name: Setup Terraform
-      if: steps.check_lambda.outputs.lambda_exists == 'false'
       uses: hashicorp/setup-terraform@v2
 
     # Apply Terraform if Lambda doesn't exist
     - name: Clean Terraform State and Apply
-      if: steps.check_lambda.outputs.lambda_exists == 'false'
+      # if: steps.check_lambda.outputs.lambda_exists == 'false'
       run: |
         cd oauth-proxy/deploy
         terraform init
+
+        # Check if Lambda exists and delete it
+        if aws lambda get-function --function-name oauth-proxy &>/dev/null; then
+          echo "Deleting existing Lambda function"
+          aws lambda delete-function --function-name oauth-proxy
+          
+          # Wait a moment for deletion to complete
+          sleep 5
+        fi
+        
+        # Check if API Gateway exists and delete it
+        API_ID=$(aws apigatewayv2 get-apis --query "Items[?Name=='oauth-proxy-api'].Id" --output text)
+        if [ -n "$API_ID" ]; then
+          echo "Deleting existing API Gateway"
+          aws apigatewayv2 delete-api --api-id $API_ID
+          
+          # Wait a moment for deletion to complete
+          sleep 5
+        fi
         
         # Check if resources exist
         ROLE_EXISTS=$(aws iam get-role --role-name oauth_proxy_lambda_role &>/dev/null && echo "true" || echo "false")
