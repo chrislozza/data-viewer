@@ -21,15 +21,11 @@ async fn oauth_endpoints(req: Request) -> Result<Response<Body>, Error> {
         req.query_string_parameters().to_query_string()
     );
     match path {
-        "/ping" | "/oauth/ping" => Ok(Response::builder().status(200).body("pong".into())?),
-        "/token" | "/oauth/token" => token(req).await,
-        _ => Ok(Response::builder().status(404).body(
-            format!(
-                "EndpointNot Found {}",
-                req.query_string_parameters().to_query_string()
-            )
-            .into(),
-        )?),
+        "/oauth/ping" => Ok(Response::builder().status(200).body("pong".into())?),
+        "/oauth/token" => token(req).await,
+        _ => Ok(Response::builder()
+            .status(404)
+            .body(format!("Endpoint not Found {}", req.uri()).into())?),
     }
 }
 

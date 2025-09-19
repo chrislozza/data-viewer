@@ -1,0 +1,16 @@
+{
+  "version": "2.0",
+  "routeKey": "$default",
+  "rawPath": "/oauth/ping",
+  "headers": {
+    "content-type": "application/json"
+  },
+  "requestContext": {
+    "http": {
+      "method": "GET",
+      "path": "/oauth"
+    }
+  },
+  "body": "",
+  "isBase64Encoded": false
+}
