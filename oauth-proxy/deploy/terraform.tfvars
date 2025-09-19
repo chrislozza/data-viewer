@@ -8,4 +8,4 @@ lambda_package_path  = "./deployment-package.zip"
 #   CLIENT_SECRET = "your-client-secret"
 # }
 api_name      = "oauth-proxy-api"
-api_route_key = "POST /oauth"
+api_route_key = "ANY /oauth/{proxy+}"
