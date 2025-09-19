@@ -45,7 +45,7 @@ resource "aws_apigatewayv2_integration" "oauth_integration" {
   api_id             = aws_apigatewayv2_api.oauth_api.id
   integration_type   = "AWS_PROXY"
   integration_uri    = aws_lambda_function.oauth_proxy.invoke_arn
-  integration_method = "ANY"
+  integration_method = "POST"
 }
 
 # Permission for API Gateway to invoke Lambda
