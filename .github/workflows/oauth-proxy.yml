@@ -70,12 +70,12 @@ jobs:
 
     # Setup Terraform
     - name: Setup Terraform
-      if: steps.check_lambda.outputs.lambda_exists == 'false'
+      # if: steps.check_lambda.outputs.lambda_exists == 'false'
       uses: hashicorp/setup-terraform@v2
 
     # Apply Terraform if Lambda doesn't exist
     - name: Clean Terraform State and Apply
-      if: steps.check_lambda.outputs.lambda_exists == 'false'
+      # if: steps.check_lambda.outputs.lambda_exists == 'false'
       run: |
         cd oauth-proxy/deploy
         terraform init

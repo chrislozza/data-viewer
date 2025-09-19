@@ -36,7 +36,7 @@ resource "aws_apigatewayv2_stage" "default" {
 # Create routes for your endpoints
 resource "aws_apigatewayv2_route" "oauth_route" {
   api_id    = aws_apigatewayv2_api.oauth_api.id
-  route_key = "ANY /oauth" # Adjust based on your needs
+  route_key = var.api_route_key
   target    = "integrations/${aws_apigatewayv2_integration.oauth_integration.id}"
 }
 
@@ -45,7 +45,7 @@ resource "aws_apigatewayv2_integration" "oauth_integration" {
   api_id             = aws_apigatewayv2_api.oauth_api.id
   integration_type   = "AWS_PROXY"
   integration_uri    = aws_lambda_function.oauth_proxy.invoke_arn
-  integration_method = "POST"
+  integration_method = "ANY"
 }
 
 # Permission for API Gateway to invoke Lambda
