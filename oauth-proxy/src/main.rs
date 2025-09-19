@@ -1,11 +1,6 @@
 use axum::{body::Body, response::Response};
 use common::Init;
-use common::logging::StructuredLogging;
-use lambda_http::tracing::subscriber::fmt::format;
-use lambda_http::{Error, IntoResponse, Request, RequestExt, service_fn};
-use serde::Serializer;
-use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use lambda_http::{Error, Request, RequestExt, service_fn};
 use tracing::info;
 
 mod secrets;

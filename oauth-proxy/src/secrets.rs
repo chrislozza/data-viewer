@@ -1,8 +1,8 @@
 use aws_config::meta::region::RegionProviderChain;
 use aws_sdk_ssm::types::{Parameter, error::AssociationDoesNotExist};
 use aws_sdk_ssm::{Client, Error};
-use serde::{Deserialize, Serialize};
-use tracing::{error, info};
+use serde::Serialize;
+use tracing::info;
 
 const CLIENT_ID: &str = "CLIENT_ID";
 const REFRESH_TOKEN: &str = "REFRESH_TOKEN";
