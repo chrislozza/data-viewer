@@ -12,3 +12,8 @@ output "oauth_endpoint" {
   description = "OAuth token endpoint URL"
   value       = "${aws_apigatewayv2_api.oauth_api.api_endpoint}/oauth/token"
 }
+
+output "api_key" {
+  value     = aws_apigatewayv2_api_key.client_api_key.value
+  sensitive = true
+}

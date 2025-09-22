@@ -35,9 +35,10 @@ resource "aws_apigatewayv2_stage" "default" {
 
 # Create routes for your endpoints
 resource "aws_apigatewayv2_route" "oauth_route" {
-  api_id    = aws_apigatewayv2_api.oauth_api.id
-  route_key = var.api_route_key
-  target    = "integrations/${aws_apigatewayv2_integration.oauth_integration.id}"
+  api_id           = aws_apigatewayv2_api.oauth_api.id
+  route_key        = var.api_route_key
+  target           = "integrations/${aws_apigatewayv2_integration.oauth_integration.id}"
+  api_key_required = true
 }
 
 # Create integration with your Lambda
@@ -61,4 +62,36 @@ resource "aws_lambda_permission" "api_gw" {
 resource "aws_cloudwatch_log_group" "api_logs" {
   name              = "/aws/apigateway/${aws_apigatewayv2_api.oauth_api.name}"
   retention_in_days = 30
+}
+
+
+resource "aws_apigatewayv2_api_key" "client_api_key" {
+  name = "oauth-proxy-client-key"
+}
+
+resource "aws_apigatewayv2_usage_plan" "usage_plan" {
+  name        = "oauth-proxy-usage-plan"
+  description = "Usage plan for OAuth Proxy API"
+
+  api_stages {
+    api_id = aws_apigatewayv2_api.oauth_api.id
+    stage  = aws_apigatewayv2_stage.default.name
+  }
+
+  # Optional: Add quota and throttle settings
+  quota_settings {
+    limit  = 1000
+    period = "MONTH"
+  }
+
+  throttle_settings {
+    burst_limit = 5
+    rate_limit  = 10
+  }
+}
+
+resource "aws_apigatewayv2_usage_plan_key" "usage_plan_key" {
+  key_id        = aws_apigatewayv2_api_key.client_api_key.id
+  key_type      = "API_KEY"
+  usage_plan_id = aws_apigatewayv2_usage_plan.usage_plan.id
 }
