@@ -4,6 +4,11 @@ on:
   push:
     branches: [ main ]
   workflow_dispatch:
+    inputs:
+      lambda_only:
+        description: 'Set to "true" to update only the Lambda function code'
+        required: false
+        default: 'true'
 
 jobs:
   build-and-deploy:
@@ -47,13 +52,23 @@ jobs:
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         aws-region: ${{ secrets.AWS_REGION }}
         
+    # Update Lambda directly if it exists
+    - name: Update Lambda Function
+      if: ${{ github.event.inputs.lambda_only == 'true' }}
+      run: |
+        echo "Updating Lambda function code directly"
+        aws lambda update-function-code \
+          --function-name oauth-proxy \
+          --zip-file fileb://lambda-package.zip
+
     # Setup Terraform
     - name: Setup Terraform
+      if: ${{ github.event.inputs.lambda_only == 'false' }}
       uses: hashicorp/setup-terraform@v2
 
     # Apply Terraform if Lambda doesn't exist
     - name: Clean Terraform State and Apply
-      # if: steps.check_lambda.outputs.lambda_exists == 'false'
+      if: ${{ github.event.inputs.lambda_only == 'false' }}
       run: |
         cd oauth-proxy/deploy
         terraform init

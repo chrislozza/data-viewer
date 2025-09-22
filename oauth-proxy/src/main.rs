@@ -1,6 +1,6 @@
 use axum::{body::Body, response::Response};
 use common::Init;
-use lambda_http::{Error, Request, RequestExt, service_fn};
+use lambda_http::{Error, Request, RequestExt, http::StatusCode, service_fn};
 use tracing::info;
 
 mod secrets;
@@ -10,17 +10,46 @@ async fn oauth_endpoints(req: Request) -> Result<Response<Body>, Error> {
 
     let path = req.uri().path();
 
+    let res = check_headers(&req).await?;
+    if res.status() != StatusCode::ACCEPTED {
+        return Ok(res);
+    }
+
     info!(
         "path: {} query: {}",
         path,
         req.query_string_parameters().to_query_string()
     );
     match path {
-        "/oauth/ping" => Ok(Response::builder().status(200).body("pong".into())?),
+        "/oauth/ping" => Ok(Response::builder()
+            .status(StatusCode::OK)
+            .body("pong".into())?),
         "/oauth/token" => token(req).await,
         _ => Ok(Response::builder()
-            .status(404)
+            .status(StatusCode::NOT_FOUND)
             .body(format!("Endpoint not Found {}", req.uri()).into())?),
+    }
+}
+
+async fn check_headers(req: &Request) -> Result<Response<Body>, Error> {
+    let headers = req.headers();
+    let api_key = match headers.get("x-api-key") {
+        Some(api_key) => api_key,
+        None => {
+            return Ok(Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body("API Key Not Found".into())?);
+        }
+    };
+    let stored_api_key = secrets::aws_api_key().await?;
+    if stored_api_key.ne(api_key) {
+        Ok(Response::builder()
+            .status(StatusCode::UNAUTHORIZED)
+            .body("Unauthorized key".into())?)
+    } else {
+        Ok(Response::builder()
+            .status(StatusCode::ACCEPTED)
+            .body("Authorized".into())?)
     }
 }
 
@@ -31,18 +60,22 @@ async fn token(req: Request) -> Result<Response<Body>, Error> {
         Some(client_id) => client_id,
         None => {
             return Ok(Response::builder()
-                .status(404)
+                .status(StatusCode::NOT_FOUND)
                 .body("Client Id Not Found".into())?);
         }
     };
 
     let secrets = match secrets::get_secrets(client_id).await {
         Ok(secrets) => secrets,
-        Err(e) => return Ok(Response::builder().status(500).body(e.to_string().into())?),
+        Err(e) => {
+            return Ok(Response::builder()
+                .status(StatusCode::INTERNAL_SERVER_ERROR)
+                .body(e.to_string().into())?);
+        }
     };
 
     Ok(Response::builder()
-        .status(200)
+        .status(StatusCode::OK)
         .body(serde_json::to_string(&secrets).unwrap_or_default().into())?)
 }
 

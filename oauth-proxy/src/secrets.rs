@@ -6,6 +6,7 @@ use tracing::info;
 
 const CLIENT_ID: &str = "CLIENT_ID";
 const REFRESH_TOKEN: &str = "REFRESH_TOKEN";
+const AWS_API_KEY: &str = "AWS_API_KEY";
 
 #[derive(Serialize)]
 pub struct Secrets {
@@ -44,6 +45,16 @@ async fn get_parameters(key: &str, client: &Client) -> Result<Parameter, Error> 
         }
     };
     Ok(parameter)
+}
+
+pub(crate) async fn aws_api_key() -> Result<String, Error> {
+    let region_provider = RegionProviderChain::default_provider();
+    let config = aws_config::from_env().region(region_provider).load().await;
+    let client = Client::new(&config);
+
+    let stored_api_key = get_parameters(AWS_API_KEY, &client).await?;
+
+    Ok(stored_api_key.value.unwrap())
 }
 
 pub(crate) async fn get_secrets(req_client_id: &str) -> Result<Secrets, Error> {
