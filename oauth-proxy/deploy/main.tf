@@ -35,3 +35,22 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
   role       = aws_iam_role.lambda_exec.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
 }
+
+
+# Add this policy to grant SSM parameter access
+resource "aws_iam_role_policy" "ssm_parameter_access" {
+  name = "ssm_parameter_access"
+  role = aws_iam_role.lambda_exec.name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = "ssm:GetParameter"
+        Resource = [
+          "arn:aws:ssm:*:*:parameter/*",
+        ]
+      }
+    ]
+  })
+}

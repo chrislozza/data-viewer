@@ -5,6 +5,7 @@ use serde::Serialize;
 use tracing::info;
 
 const CLIENT_ID: &str = "CLIENT_ID";
+const CLIENT_SECRET: &str = "CLIENT_SECRET";
 const REFRESH_TOKEN: &str = "REFRESH_TOKEN";
 const API_KEY: &str = "OAUTH_API_KEY";
 
@@ -73,7 +74,7 @@ pub(crate) async fn get_secrets(req_client_id: &str) -> Result<Secrets, Error> {
                 .build(),
         ));
     }
-    let client_secret = get_parameters(req_client_id, &client, true).await?;
+    let client_secret = get_parameters(CLIENT_SECRET, &client, true).await?;
     let refresh_token = get_parameters(REFRESH_TOKEN, &client, true).await?;
 
     info!("Got secret items for client_id {req_client_id}");
