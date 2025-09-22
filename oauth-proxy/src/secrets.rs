@@ -6,7 +6,7 @@ use tracing::info;
 
 const CLIENT_ID: &str = "CLIENT_ID";
 const REFRESH_TOKEN: &str = "REFRESH_TOKEN";
-const AWS_API_KEY: &str = "AWS_API_KEY";
+const API_KEY: &str = "OAUTH_API_KEY";
 
 #[derive(Serialize)]
 pub struct Secrets {
@@ -25,11 +25,11 @@ impl From<&[String; 3]> for Secrets {
     }
 }
 
-async fn get_parameters(key: &str, client: &Client) -> Result<Parameter, Error> {
+async fn get_parameters(key: &str, client: &Client, decrypt: bool) -> Result<Parameter, Error> {
     let parameter_out = client
         .get_parameter()
         .name("/".to_owned() + key)
-        .with_decryption(true)
+        .with_decryption(decrypt)
         .send()
         .await?;
 
@@ -52,7 +52,7 @@ pub(crate) async fn aws_api_key() -> Result<String, Error> {
     let config = aws_config::from_env().region(region_provider).load().await;
     let client = Client::new(&config);
 
-    let stored_api_key = get_parameters(AWS_API_KEY, &client).await?;
+    let stored_api_key = get_parameters(API_KEY, &client, true).await?;
 
     Ok(stored_api_key.value.unwrap())
 }
@@ -63,7 +63,7 @@ pub(crate) async fn get_secrets(req_client_id: &str) -> Result<Secrets, Error> {
     let config = aws_config::from_env().region(region_provider).load().await;
     let client = Client::new(&config);
 
-    let client_id = get_parameters(CLIENT_ID, &client).await?;
+    let client_id = get_parameters(CLIENT_ID, &client, false).await?;
     let client_id = client_id.value.unwrap();
     if req_client_id != client_id {
         let builder = AssociationDoesNotExist::builder();
@@ -73,8 +73,8 @@ pub(crate) async fn get_secrets(req_client_id: &str) -> Result<Secrets, Error> {
                 .build(),
         ));
     }
-    let client_secret = get_parameters(req_client_id, &client).await?;
-    let refresh_token = get_parameters(REFRESH_TOKEN, &client).await?;
+    let client_secret = get_parameters(req_client_id, &client, true).await?;
+    let refresh_token = get_parameters(REFRESH_TOKEN, &client, true).await?;
 
     info!("Got secret items for client_id {req_client_id}");
 
