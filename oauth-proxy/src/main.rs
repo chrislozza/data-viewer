@@ -3,6 +3,8 @@ use common::Init;
 use lambda_http::{Error, Request, RequestExt, http::StatusCode, service_fn};
 use tracing::info;
 
+use crate::secrets::Endpoint;
+
 mod secrets;
 
 async fn oauth_endpoints(req: Request) -> Result<Response<Body>, Error> {
@@ -65,7 +67,16 @@ async fn token(req: Request) -> Result<Response<Body>, Error> {
         }
     };
 
-    let secrets = match secrets::get_secrets(client_id).await {
+    let endpoint = match query_params.first("endpoint") {
+        Some(client_id) => client_id,
+        None => {
+            return Ok(Response::builder()
+                .status(StatusCode::NOT_FOUND)
+                .body("Endpoint Not Found".into())?);
+        }
+    };
+
+    let secrets = match secrets::get_secrets(client_id, Endpoint::from(endpoint)).await {
         Ok(secrets) => secrets,
         Err(e) => {
             return Ok(Response::builder()
