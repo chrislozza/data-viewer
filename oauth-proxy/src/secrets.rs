@@ -5,7 +5,26 @@ use serde::Serialize;
 use tracing::info;
 
 const CLIENT_ID: &str = "CLIENT_ID";
+const CLIENT_SECRET: &str = "CLIENT_SECRET";
+const CLIENT_ID_SB: &str = "CLIENT_ID_SB";
+const CLIENT_SECRET_SB: &str = "CLIENT_SECRET_SB";
 const REFRESH_TOKEN: &str = "REFRESH_TOKEN";
+const API_KEY: &str = "OAUTH_API_KEY";
+
+pub(crate) enum Endpoint {
+    Live,
+    Sandbox,
+}
+
+impl From<&str> for Endpoint {
+    fn from(val: &str) -> Self {
+        match val {
+            "live" => Endpoint::Live,
+            "sandbox" => Endpoint::Sandbox,
+            _ => panic!("Unknown endpoint"),
+        }
+    }
+}
 
 #[derive(Serialize)]
 pub struct Secrets {
@@ -24,11 +43,11 @@ impl From<&[String; 3]> for Secrets {
     }
 }
 
-async fn get_parameters(key: &str, client: &Client) -> Result<Parameter, Error> {
+async fn get_parameters(key: &str, client: &Client, decrypt: bool) -> Result<Parameter, Error> {
     let parameter_out = client
         .get_parameter()
         .name("/".to_owned() + key)
-        .with_decryption(true)
+        .with_decryption(decrypt)
         .send()
         .await?;
 
@@ -46,13 +65,27 @@ async fn get_parameters(key: &str, client: &Client) -> Result<Parameter, Error> 
     Ok(parameter)
 }
 
-pub(crate) async fn get_secrets(req_client_id: &str) -> Result<Secrets, Error> {
+pub(crate) async fn aws_api_key() -> Result<String, Error> {
+    let region_provider = RegionProviderChain::default_provider();
+    let config = aws_config::from_env().region(region_provider).load().await;
+    let client = Client::new(&config);
+
+    let stored_api_key = get_parameters(API_KEY, &client, true).await?;
+
+    Ok(stored_api_key.value.unwrap())
+}
+
+pub(crate) async fn get_secrets(req_client_id: &str, endpoint: Endpoint) -> Result<Secrets, Error> {
     // Load AWS configuration
     let region_provider = RegionProviderChain::default_provider();
     let config = aws_config::from_env().region(region_provider).load().await;
     let client = Client::new(&config);
 
-    let client_id = get_parameters(CLIENT_ID, &client).await?;
+    let client_id = match endpoint {
+        Endpoint::Live => get_parameters(CLIENT_ID, &client, false).await?,
+        Endpoint::Sandbox => get_parameters(CLIENT_ID_SB, &client, false).await?,
+    };
+
     let client_id = client_id.value.unwrap();
     if req_client_id != client_id {
         let builder = AssociationDoesNotExist::builder();
@@ -62,8 +95,11 @@ pub(crate) async fn get_secrets(req_client_id: &str) -> Result<Secrets, Error> {
                 .build(),
         ));
     }
-    let client_secret = get_parameters(req_client_id, &client).await?;
-    let refresh_token = get_parameters(REFRESH_TOKEN, &client).await?;
+    let client_secret = match endpoint {
+        Endpoint::Live => get_parameters(CLIENT_SECRET, &client, true).await?,
+        Endpoint::Sandbox => get_parameters(CLIENT_SECRET_SB, &client, true).await?,
+    };
+    let refresh_token = get_parameters(REFRESH_TOKEN, &client, true).await?;
 
     info!("Got secret items for client_id {req_client_id}");
 
