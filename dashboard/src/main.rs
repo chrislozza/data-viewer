@@ -4,20 +4,16 @@ use axum::{
     routing::get,
 };
 use clap::Parser;
-use db_client::DBClient;
+use common::db_client::{self, DBClient};
+use common::settings::{Settings, SettingsReader};
 use serde_json::to_string;
 use std::sync::Arc;
 use tokio::signal;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
 
-mod db_client;
-mod logging;
 mod models;
 mod service;
-mod settings;
-
-use settings::Config;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeDir;
 
@@ -43,7 +39,7 @@ async fn main() {
     let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate()).unwrap();
 
     let cmdline_args = Args::parse();
-    let settings = match Config::read_config_file(cmdline_args.settings.as_str()) {
+    let settings: Settings = match SettingsReader::read_config_file(cmdline_args.settings.as_str()) {
         Err(val) => {
             println!("Settings file: {} error: {}", cmdline_args.settings, val);
             std::process::exit(1);
@@ -52,8 +48,7 @@ async fn main() {
     };
 
     let cancel_token = CancellationToken::new();
-    let _ = logging::Logging::new(&settings.log_level)
-        .await
+    let _ = common::Init::logging(&settings.log_level)
         .expect("Failed to start logging");
 
     let version = env!("CARGO_PKG_VERSION");

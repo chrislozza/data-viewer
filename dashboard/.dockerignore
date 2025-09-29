@@ -1,0 +1,53 @@
+# Build artifacts
+target/
+Cargo.lock
+
+# Git
+.git/
+.gitignore
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temporary files
+.tmp/
+temp/
+
+# Documentation
+README.md
+docs/
+
+# Deployment files (not needed in container)
+deploy/*.tf
+deploy/*.tfvars
+deploy/README.md
+
+# Testing
+test/
+tests/
+*.test
+
+# Node.js (if any frontend build artifacts)
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Coverage reports
+coverage/
+*.coverage

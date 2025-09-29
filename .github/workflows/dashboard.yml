@@ -1,0 +1,247 @@
+name: Deploy Dashboard to AWS App Runner
+
+on:
+  push:
+    branches:
+      - main
+      - app-runner-dashboard
+    paths: 
+      - 'dashboard/**'
+      - 'common/**'
+      - '.github/workflows/dashboard.yml'
+  workflow_dispatch:
+    inputs:
+      deploy_infrastructure:
+        description: 'Deploy/Update infrastructure with Terraform'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+        - 'false'
+        - 'true'
+      destroy_and_recreate:
+        description: 'Destroy and recreate infrastructure (WARNING: URL will change)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+        - 'false'
+        - 'true'
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  ECR_REPOSITORY: data-viewer-dashboard
+  IMAGE_TAG: ${{ github.sha }}
+  BRANCH_NAME: ${{ github.ref_name }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Display branch info
+      run: |
+        echo "🚀 Deploying from branch: ${{ env.BRANCH_NAME }}"
+        echo "📦 Image tag: ${{ env.IMAGE_TAG }}"
+        if [ "${{ env.BRANCH_NAME }}" = "main" ]; then
+          echo "🎯 Production deployment"
+        else
+          echo "🧪 Testing deployment from feature branch"
+        fi
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Create GCP credentials file
+      run: |
+        mkdir -p .tmp
+        echo '${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}' > .tmp/service-client.json
+        
+        # Verify file was created
+        if [ -f .tmp/service-client.json ]; then
+          echo "✅ GCP credentials file created"
+          ls -la .tmp/
+          echo "File size: $(wc -c < .tmp/service-client.json) bytes"
+          echo "Working directory: $(pwd)"
+          echo "Contents of .dockerignore:"
+          cat .dockerignore | grep -A2 -B2 "tmp" || echo "No .tmp references in .dockerignore"
+        else
+          echo "❌ Failed to create credentials file"
+          exit 1
+        fi
+
+    - name: Build, tag, and push image to Amazon ECR
+      id: build-image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ env.IMAGE_TAG }}
+      run: |
+        # Verify the credentials file exists
+        if [ ! -f .tmp/service-client.json ]; then
+          echo "❌ Error: .tmp/service-client.json not found"
+          exit 1
+        fi
+        
+        echo "📦 Building Docker image..."
+        
+        # List files to ensure .tmp/service-client.json is present
+        echo "Files in build context:"
+        ls -la .tmp/
+        
+        # Build with buildx and load into local docker
+        docker buildx build \
+          --no-cache \
+          --progress=plain \
+          --load \
+          --platform linux/amd64 \
+          -f dashboard/deploy/Dockerfile \
+          -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+          -t $ECR_REGISTRY/$ECR_REPOSITORY:${{ env.BRANCH_NAME }} \
+          .
+        
+        echo "✅ Build complete"
+        echo "📤 Pushing images to ECR..."
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:${{ env.BRANCH_NAME }}
+        
+        # Only push 'latest' tag from main branch
+        if [ "${{ env.BRANCH_NAME }}" = "main" ]; then
+          echo "Main branch detected - tagging as latest"
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
+        else
+          echo "Feature branch detected - skipping 'latest' tag"
+        fi
+        
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
+
+    - name: Cleanup credentials
+      if: always()
+      run: |
+        rm -rf .tmp/service-client.json .tmp/
+        echo "🧹 Credentials file cleaned up"
+
+    # Deploy infrastructure with Terraform (optional, controlled by workflow input)
+    - name: Setup Terraform
+      if: ${{ github.event.inputs.deploy_infrastructure == 'true' || github.event.inputs.destroy_and_recreate == 'true' }}
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.6.0
+
+    - name: Terraform Init
+      if: ${{ github.event.inputs.deploy_infrastructure == 'true' || github.event.inputs.destroy_and_recreate == 'true' }}
+      run: |
+        cd dashboard/deploy/terraform
+        terraform init
+
+    - name: Terraform Destroy (if recreating)
+      if: ${{ github.event.inputs.destroy_and_recreate == 'true' }}
+      env:
+        TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+      run: |
+        cd dashboard/deploy/terraform
+        echo "⚠️  WARNING: Destroying existing infrastructure. URL will change!"
+        terraform destroy -auto-approve -var="aws_region=${{ env.AWS_REGION }}"
+        echo "✅ Infrastructure destroyed"
+
+    - name: Terraform Plan
+      if: ${{ github.event.inputs.deploy_infrastructure == 'true' || github.event.inputs.destroy_and_recreate == 'true' }}
+      env:
+        TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+      run: |
+        cd dashboard/deploy/terraform
+        terraform plan -var="aws_region=${{ env.AWS_REGION }}"
+
+    - name: Terraform Apply
+      if: ${{ github.event.inputs.deploy_infrastructure == 'true' || github.event.inputs.destroy_and_recreate == 'true' }}
+      env:
+        TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+      run: |
+        cd dashboard/deploy/terraform
+        if [ "${{ github.event.inputs.destroy_and_recreate }}" = "true" ]; then
+          echo "🔨 Creating fresh infrastructure..."
+        else
+          echo "📦 Deploying/updating infrastructure..."
+        fi
+        terraform apply -auto-approve -var="aws_region=${{ env.AWS_REGION }}"
+        echo "✅ Infrastructure ready"
+
+    # Update App Runner service to use the new image
+    - name: Deploy to App Runner
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ env.IMAGE_TAG }}
+      run: |
+        # Get the service ARN
+        SERVICE_ARN=$(aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='$ECR_REPOSITORY'].ServiceArn" --output text)
+        
+        if [ -n "$SERVICE_ARN" ]; then
+          echo "App Runner service found: $SERVICE_ARN"
+          
+          # Check service status
+          SERVICE_STATUS=$(aws apprunner describe-service --service-arn $SERVICE_ARN --query "Service.Status" --output text)
+          echo "Current service status: $SERVICE_STATUS"
+          
+          if [ "$SERVICE_STATUS" = "RUNNING" ]; then
+            echo "Service is running, starting deployment..."
+            aws apprunner start-deployment --service-arn $SERVICE_ARN
+            
+            echo "Deployment started for service: $SERVICE_ARN"
+            echo "App Runner will automatically pull the latest image with tag: latest"
+            
+            # Wait for deployment to complete (optional)
+            echo "Waiting for deployment to complete..."
+            aws apprunner wait service-updated --service-arn $SERVICE_ARN
+            
+            # Get the service URL
+            SERVICE_URL=$(aws apprunner describe-service --service-arn $SERVICE_ARN --query "Service.ServiceUrl" --output text)
+            echo "Service deployed successfully!"
+            echo "Service URL: https://$SERVICE_URL"
+          elif [ "$SERVICE_STATUS" = "OPERATION_IN_PROGRESS" ]; then
+            echo "⚠️  Service is currently deploying or updating. Waiting for operation to complete..."
+            aws apprunner wait service-updated --service-arn $SERVICE_ARN
+            echo "✅ Previous operation completed. Starting new deployment..."
+            aws apprunner start-deployment --service-arn $SERVICE_ARN
+          elif [ "$SERVICE_STATUS" = "CREATE_FAILED" ] || [ "$SERVICE_STATUS" = "DELETE_FAILED" ]; then
+            echo "❌ Service is in $SERVICE_STATUS state. Please check AWS Console and fix the issue."
+            echo "Service ARN: $SERVICE_ARN"
+            exit 1
+          else
+            echo "⚠️  Service is in $SERVICE_STATUS state. Cannot deploy at this time."
+            echo "Please wait for the service to reach RUNNING state or check AWS Console for issues."
+            echo "Service ARN: $SERVICE_ARN"
+            exit 1
+          fi
+        else
+          echo "App Runner service does not exist. Please run terraform apply first or set deploy_infrastructure to true."
+          exit 1
+        fi
+
+    - name: Output deployment info
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+      run: |
+        echo "Image built and pushed: $ECR_REGISTRY/$ECR_REPOSITORY:${{ env.IMAGE_TAG }}"
+        
+        # Try to get service URL if service exists
+        SERVICE_ARN=$(aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='$ECR_REPOSITORY'].ServiceArn" --output text 2>/dev/null || echo "")
+        if [ -n "$SERVICE_ARN" ]; then
+          SERVICE_URL=$(aws apprunner describe-service --service-arn $SERVICE_ARN --query "Service.ServiceUrl" --output text 2>/dev/null || echo "")
+          if [ -n "$SERVICE_URL" ]; then
+            echo "Dashboard URL: https://$SERVICE_URL"
+          fi
+        fi
