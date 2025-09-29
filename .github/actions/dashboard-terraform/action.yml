@@ -1,0 +1,152 @@
+name: Manage Dashboard Terraform
+description: Run Terraform operations for the dashboard App Runner infrastructure.
+
+inputs:
+  aws-region:
+    description: AWS region where the infrastructure resides
+    required: true
+  aws-access-key-id:
+    description: AWS access key ID with permissions for Terraform-managed resources
+    required: true
+  aws-secret-access-key:
+    description: AWS secret access key with permissions for Terraform-managed resources
+    required: true
+  db-password:
+    description: Database password passed to Terraform as TF_VAR_db_password
+    required: false
+  operation:
+    description: Terraform operation to execute (apply | destroy | recreate)
+    required: true
+  working-directory:
+    description: Directory containing Terraform configuration
+    required: false
+    default: dashboard/deploy/terraform
+  app-name:
+    description: Name of the App Runner service (also ECR repo). Used to import existing service into state.
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ inputs.aws-access-key-id }}
+        aws-secret-access-key: ${{ inputs.aws-secret-access-key }}
+        aws-region: ${{ inputs.aws-region }}
+
+    - name: Set up Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.6.0
+
+    - name: Run Terraform
+      shell: bash
+      env:
+        AWS_REGION: ${{ inputs.aws-region }}
+        OPERATION: ${{ inputs.operation }}
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        TF_VAR_db_password: ${{ inputs.db-password }}
+        APP_NAME: ${{ inputs.app-name }}
+      run: |
+        set -euo pipefail
+
+        if [[ "$OPERATION" != "apply" && "$OPERATION" != "destroy" && "$OPERATION" != "recreate" ]]; then
+          echo "Unsupported Terraform operation: $OPERATION" >&2
+          exit 1
+        fi
+
+        cd "$WORKING_DIRECTORY"
+
+        echo "Initializing Terraform..."
+        terraform init -input=false
+
+        echo "Importing existing resources (best effort)..."
+        # Import existing App Runner service into state to avoid name-collision on create
+        # Prefer provided APP_NAME, otherwise try to read from terraform.tfvars
+        if [ -z "${APP_NAME:-}" ]; then
+          if [ -f "terraform.tfvars" ]; then
+            APP_NAME=$(awk -F '="|"' '/^app_name\s*=/{print $2}' terraform.tfvars | head -n1 || true)
+          fi
+        fi
+
+        if [ -n "${APP_NAME:-}" ]; then
+          EXISTING_ARN=$(aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='${APP_NAME}'].ServiceArn" --output text 2>/dev/null || echo "")
+          if [ -n "$EXISTING_ARN" ]; then
+            echo "Found existing App Runner service: $EXISTING_ARN (name=$APP_NAME). Importing into state..."
+            terraform import aws_apprunner_service.dashboard_service "$EXISTING_ARN" >/dev/null 2>&1 || true
+          else
+            echo "No existing App Runner service found for name '$APP_NAME'"
+          fi
+        else
+          echo "APP_NAME not provided and not found in terraform.tfvars; skipping service import"
+        fi
+        terraform import aws_iam_role.apprunner_instance_role data-viewer-dashboard-apprunner-instance-role >/dev/null 2>&1 || true
+        terraform import aws_iam_role.apprunner_access_role data-viewer-dashboard-apprunner-access-role >/dev/null 2>&1 || true
+        terraform import aws_iam_role_policy.apprunner_instance_policy data-viewer-dashboard-apprunner-instance-role:data-viewer-dashboard-apprunner-instance-policy >/dev/null 2>&1 || true
+        terraform import aws_iam_role_policy_attachment.apprunner_access_role_ecr data-viewer-dashboard-apprunner-access-role/arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess >/dev/null 2>&1 || true
+        terraform import aws_ecr_repository.app_repository data-viewer-dashboard >/dev/null 2>&1 || true
+        terraform import aws_ecr_lifecycle_policy.app_repository_policy data-viewer-dashboard >/dev/null 2>&1 || true
+        # Import the latest autoscaling configuration revision (avoid creating unnecessary new revisions)
+        LATEST_AUTOSCALE_ARN=$(aws apprunner list-auto-scaling-configurations \
+          --auto-scaling-configuration-name "dv-dashboard-autoscale" \
+          --query "AutoScalingConfigurationSummaryList | sort_by(@, &AutoScalingConfigurationRevision) | [-1].AutoScalingConfigurationArn" \
+          --output text 2>/dev/null || echo "")
+        if [ -n "$LATEST_AUTOSCALE_ARN" ] && [ "$LATEST_AUTOSCALE_ARN" != "None" ]; then
+          echo "Importing latest autoscaling configuration: $LATEST_AUTOSCALE_ARN"
+          terraform import aws_apprunner_auto_scaling_configuration_version.dashboard_autoscaling "$LATEST_AUTOSCALE_ARN" >/dev/null 2>&1 || true
+        else
+          echo "No existing autoscaling configuration revisions found for name 'dv-dashboard-autoscale'"
+        fi
+
+        if [[ "$OPERATION" == "destroy" || "$OPERATION" == "recreate" ]]; then
+          echo "Destroying existing App Runner service (preserving ECR repository)..."
+          terraform destroy -auto-approve \
+            -target=aws_apprunner_service.dashboard_service \
+            -var="aws_region=$AWS_REGION"
+        fi
+
+        if [[ "$OPERATION" == "apply" || "$OPERATION" == "recreate" ]]; then
+          if [[ -z "$TF_VAR_db_password" ]]; then
+            echo "db-password input is required for apply/recreate operations" >&2
+            exit 1
+          fi
+
+          echo "Ensuring supporting resources exist (ECR, IAM, autoscaling)..."
+          # Prune older autoscaling configuration revisions to stay under AWS quota (5 revisions per name)
+          echo "Pruning old autoscaling configuration revisions for 'dv-dashboard-autoscale'..."
+          SORTED_ARNS=$(aws apprunner list-auto-scaling-configurations \
+            --auto-scaling-configuration-name "dv-dashboard-autoscale" \
+            --query "AutoScalingConfigurationSummaryList | sort_by(@, &AutoScalingConfigurationRevision)[].AutoScalingConfigurationArn" \
+            --output text 2>/dev/null || echo "")
+          if [ -n "$SORTED_ARNS" ]; then
+            ARN_ARRAY=($SORTED_ARNS)
+            KEEP_NEWEST="${ARN_ARRAY[-1]}"
+            for ARN in "${ARN_ARRAY[@]}"; do
+              if [ "$ARN" = "$KEEP_NEWEST" ]; then
+                echo "  Keeping newest revision: $ARN"
+                continue
+              fi
+              echo "  Deleting old revision: $ARN"
+              aws apprunner delete-auto-scaling-configuration --auto-scaling-configuration-arn "$ARN" 2>/dev/null || true
+            done
+          else
+            echo "No existing autoscaling configuration revisions found to prune."
+          fi
+
+          terraform apply -auto-approve \
+            -target=aws_ecr_repository.app_repository \
+            -target=aws_ecr_lifecycle_policy.app_repository_policy \
+            -target=aws_iam_role.apprunner_instance_role \
+            -target=aws_iam_role_policy.apprunner_instance_policy \
+            -target=aws_iam_role.apprunner_access_role \
+            -target=aws_iam_role_policy_attachment.apprunner_access_role_ecr \
+            -target=aws_apprunner_auto_scaling_configuration_version.dashboard_autoscaling \
+            -var="aws_region=$AWS_REGION"
+
+          echo "Planning full apply..."
+          terraform plan -var="aws_region=$AWS_REGION"
+
+          echo "Applying full Terraform configuration..."
+          terraform apply -auto-approve -var="aws_region=$AWS_REGION"
+        fi

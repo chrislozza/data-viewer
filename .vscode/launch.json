@@ -21,7 +21,9 @@
             },
             "args": [
                 "--settings",
-                "${workspaceFolder}/.tmp/settings.json"
+                "${workspaceFolder}/.tmp/settings.json",
+                "--frontend",
+                "dashboard/src/frontend"
             ],
             "cwd": "${workspaceFolder}"
         },

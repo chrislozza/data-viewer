@@ -2,7 +2,12 @@ name: deploy oauth lambda
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+    paths:
+      - 'oauth-proxy/**'
+      - 'common/**'
+      - '.github/workflows/oauth-proxy.yml'
   workflow_dispatch:
     inputs:
       lambda_only:

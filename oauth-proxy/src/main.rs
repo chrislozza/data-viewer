@@ -1,6 +1,6 @@
 use axum::{body::Body, response::Response};
-use common::Init;
 use lambda_http::{Error, Request, RequestExt, http::StatusCode, service_fn};
+use common::aws_logging;
 use tracing::info;
 
 use crate::secrets::Endpoint;
@@ -92,7 +92,11 @@ async fn token(req: Request) -> Result<Response<Body>, Error> {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let _ = Init::structured_logging();
+    let _ = aws_logging::init_cloudwatch_logger(&aws_logging::LoggingConfig { 
+        log_group: "trading-tools".to_string(), 
+        log_stream: "oauth-proxy".to_string(), 
+        level: "INFO".to_string() 
+    });
     lambda_http::run(service_fn(oauth_endpoints)).await?;
     Ok(())
 }

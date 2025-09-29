@@ -1,0 +1,36 @@
+name: Deploy Dashboard to AWS App Runner
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'dashboard/**'
+      - 'common/**'
+      - '.github/workflows/dashboard.yml'
+  workflow_dispatch:
+    inputs:
+      deployment_mode:
+        description: 'Select deployment mode'
+        required: true
+        default: 'replace'
+        type: choice
+        options:
+          - replace
+          - apply
+          - recreate
+
+jobs:
+  deploy:
+    name: Run dashboard deployment pipeline
+    uses: ./.github/workflows/dashboard-deploy.yml
+    with:
+      target-branch: ${{ github.ref_name }}
+      deployment-mode: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deployment_mode || 'replace' }}
+      aws-region: ${{ vars.AWS_REGION }}
+      ecr-repository: data-viewer-dashboard
+    secrets:
+      aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      gcp-service-account-key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+      db-password: ${{ secrets.DB_PASSWORD }}
