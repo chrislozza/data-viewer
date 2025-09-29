@@ -7,9 +7,17 @@ use anyhow::Result;
 use super::db_client::DatabaseConfig;
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct LoggingConfig {
+    pub log_group: String,
+    pub log_stream: String,
+    pub level: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Settings {
     pub database: DatabaseConfig,
     pub log_level: String,
+    pub logging: LoggingConfig,
 }
 
 #[derive(Debug)]

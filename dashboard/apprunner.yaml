@@ -1,0 +1,23 @@
+version: 1.0
+runtime: docker
+build:
+  commands:
+    build:
+      - echo "Building the Docker image..."
+      # Docker build is handled by the Dockerfile
+run:
+  runtime-version: latest
+  command: /bin/bash ./startup.sh
+  network:
+    port: 8080
+  env:
+    - name: RUST_LOG
+      value: info
+    - name: PORT
+      value: "8080"
+    - name: CLOUD_SQL_CONNECTION_STRING
+      value: "savvy-nimbus-306111:europe-west2:vibgo-sql"
+    - name: CLOUD_SQL_PORT
+      value: "5433"
+    - name: DB_PASSWORD
+      value: "REPLACE_WITH_YOUR_DB_PASSWORD"

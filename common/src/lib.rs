@@ -3,6 +3,7 @@ use anyhow::Result;
 
 pub mod db_client;
 pub mod logging;
+pub mod aws_logging;
 pub mod settings;
 
 pub struct Init {}

@@ -248,6 +248,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-sdk-cloudwatchlogs"
+version = "1.103.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d54d46e691c8b72e2e2731ed0c90cd8335076280c9d9c026a8f4500e768d329a"
+dependencies = [
+ "aws-credential-types",
+ "aws-runtime",
+ "aws-smithy-async",
+ "aws-smithy-eventstream",
+ "aws-smithy-http",
+ "aws-smithy-json",
+ "aws-smithy-runtime",
+ "aws-smithy-runtime-api",
+ "aws-smithy-types",
+ "aws-types",
+ "bytes",
+ "fastrand",
+ "http 0.2.12",
+ "regex-lite",
+ "tracing",
+]
+
+[[package]]
 name = "aws-sdk-lambda"
 version = "1.97.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -930,9 +953,13 @@ name = "common"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aws-config",
+ "aws-sdk-cloudwatchlogs",
+ "chrono",
  "serde",
  "serde_json",
  "sqlx",
+ "tokio",
  "tracing",
  "tracing-subscriber",
 ]
@@ -3574,6 +3601,7 @@ dependencies = [
  "slab",
  "socket2 0.6.0",
  "tokio-macros",
+ "tracing",
  "windows-sys 0.59.0",
 ]
 
