@@ -159,6 +159,14 @@ jobs:
       run: |
         cd dashboard/deploy/terraform
         terraform init
+        
+        # Import existing resources if they exist (ignore errors if they don't)
+        terraform import aws_iam_role.apprunner_instance_role data-viewer-dashboard-apprunner-instance-role 2>/dev/null || true
+        terraform import aws_iam_role.apprunner_access_role data-viewer-dashboard-apprunner-access-role 2>/dev/null || true
+        terraform import aws_iam_role_policy.apprunner_instance_policy data-viewer-dashboard-apprunner-instance-role:data-viewer-dashboard-apprunner-instance-policy 2>/dev/null || true
+        terraform import aws_iam_role_policy_attachment.apprunner_access_role_ecr data-viewer-dashboard-apprunner-access-role/arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess 2>/dev/null || true
+        terraform import aws_ecr_repository.app_repository data-viewer-dashboard 2>/dev/null || true
+        terraform import aws_ecr_lifecycle_policy.app_repository_policy data-viewer-dashboard 2>/dev/null || true
 
     - name: Terraform Destroy (if recreating)
       if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deployment_mode == 'recreate' }}

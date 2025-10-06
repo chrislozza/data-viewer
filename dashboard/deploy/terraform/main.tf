@@ -174,7 +174,7 @@ resource "aws_apprunner_service" "dashboard_service" {
 
 # Auto Scaling Configuration
 resource "aws_apprunner_auto_scaling_configuration_version" "dashboard_autoscaling" {
-  auto_scaling_configuration_name = "${var.app_name}-autoscaling"
+  auto_scaling_configuration_name = "dv-dashboard-autoscale"
   
   max_concurrency = var.max_concurrency
   max_size        = var.max_size
