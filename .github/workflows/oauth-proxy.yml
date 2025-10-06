@@ -2,6 +2,8 @@ name: deploy oauth lambda
 
 on:
   push:
+    branches:
+      - main
     paths:
       - 'oauth-proxy/**'
       - 'common/**'
