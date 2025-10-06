@@ -4,52 +4,64 @@ on:
   push:
     branches:
       - main
-      - app-runner-dashboard
-    paths: 
+    paths:
       - 'dashboard/**'
       - 'common/**'
       - '.github/workflows/dashboard.yml'
   workflow_dispatch:
     inputs:
-      deploy_infrastructure:
-        description: 'Deploy/Update infrastructure with Terraform'
-        required: false
-        default: 'false'
+      target_branch:
+        description: 'Branch to deploy'
+        required: true
+        default: 'main'
+        type: string
+      deployment_mode:
+        description: 'Select deployment mode'
+        required: true
+        default: 'image-only'
         type: choice
         options:
-        - 'false'
-        - 'true'
-      destroy_and_recreate:
-        description: 'Destroy and recreate infrastructure (WARNING: URL will change)'
-        required: false
-        default: 'false'
-        type: choice
-        options:
-        - 'false'
-        - 'true'
+          - image-only
+          - apply
+          - recreate
 
 env:
   AWS_REGION: ${{ secrets.AWS_REGION }}
   ECR_REPOSITORY: data-viewer-dashboard
-  IMAGE_TAG: ${{ github.sha }}
-  BRANCH_NAME: ${{ github.ref_name }}
 
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout code
+    - name: Checkout code (push events)
+      if: ${{ github.event_name != 'workflow_dispatch' }}
       uses: actions/checkout@v4
 
-    - name: Display branch info
+    - name: Checkout code (manual trigger)
+      if: ${{ github.event_name == 'workflow_dispatch' }}
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ github.event.inputs.target_branch }}
+
+    - name: Determine branch and image tag
+      id: branch-info
       run: |
-        echo "🚀 Deploying from branch: ${{ env.BRANCH_NAME }}"
-        echo "📦 Image tag: ${{ env.IMAGE_TAG }}"
-        if [ "${{ env.BRANCH_NAME }}" = "main" ]; then
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          BRANCH="${{ github.event.inputs.target_branch }}"
+        else
+          BRANCH="${{ github.ref_name }}"
+        fi
+
+        echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
+        echo "DEPLOY_BRANCH=$BRANCH" >> "$GITHUB_ENV"
+        echo "IMAGE_TAG=$GITHUB_SHA" >> "$GITHUB_ENV"
+        echo "🚀 Deploying from branch: $BRANCH"
+        echo "📦 Image tag: $GITHUB_SHA"
+        if [ "$BRANCH" = "main" ]; then
           echo "🎯 Production deployment"
         else
-          echo "🧪 Testing deployment from feature branch"
+          echo "🧪 Branch deployment"
         fi
 
     - name: Configure AWS credentials
@@ -89,6 +101,7 @@ jobs:
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG: ${{ env.IMAGE_TAG }}
+        DEPLOY_BRANCH: ${{ env.DEPLOY_BRANCH }}
       run: |
         # Verify the credentials file exists
         if [ ! -f .tmp/service-client.json ]; then
@@ -104,22 +117,21 @@ jobs:
         
         # Build with buildx and load into local docker
         docker buildx build \
-          --no-cache \
           --progress=plain \
           --load \
           --platform linux/amd64 \
           -f dashboard/deploy/Dockerfile \
           -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-          -t $ECR_REGISTRY/$ECR_REPOSITORY:${{ env.BRANCH_NAME }} \
+          -t $ECR_REGISTRY/$ECR_REPOSITORY:$DEPLOY_BRANCH \
           .
-        
+
         echo "✅ Build complete"
         echo "📤 Pushing images to ECR..."
         docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:${{ env.BRANCH_NAME }}
-        
+        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$DEPLOY_BRANCH
+
         # Only push 'latest' tag from main branch
-        if [ "${{ env.BRANCH_NAME }}" = "main" ]; then
+        if [ "$DEPLOY_BRANCH" = "main" ]; then
           echo "Main branch detected - tagging as latest"
           docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
@@ -137,19 +149,19 @@ jobs:
 
     # Deploy infrastructure with Terraform (optional, controlled by workflow input)
     - name: Setup Terraform
-      if: ${{ github.event.inputs.deploy_infrastructure == 'true' || github.event.inputs.destroy_and_recreate == 'true' }}
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deployment_mode != 'image-only' }}
       uses: hashicorp/setup-terraform@v3
       with:
         terraform_version: 1.6.0
 
     - name: Terraform Init
-      if: ${{ github.event.inputs.deploy_infrastructure == 'true' || github.event.inputs.destroy_and_recreate == 'true' }}
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deployment_mode != 'image-only' }}
       run: |
         cd dashboard/deploy/terraform
         terraform init
 
     - name: Terraform Destroy (if recreating)
-      if: ${{ github.event.inputs.destroy_and_recreate == 'true' }}
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deployment_mode == 'recreate' }}
       env:
         TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
       run: |
@@ -159,7 +171,7 @@ jobs:
         echo "✅ Infrastructure destroyed"
 
     - name: Terraform Plan
-      if: ${{ github.event.inputs.deploy_infrastructure == 'true' || github.event.inputs.destroy_and_recreate == 'true' }}
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deployment_mode != 'image-only' }}
       env:
         TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
       run: |
@@ -167,12 +179,12 @@ jobs:
         terraform plan -var="aws_region=${{ env.AWS_REGION }}"
 
     - name: Terraform Apply
-      if: ${{ github.event.inputs.deploy_infrastructure == 'true' || github.event.inputs.destroy_and_recreate == 'true' }}
+      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deployment_mode != 'image-only' }}
       env:
         TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
       run: |
         cd dashboard/deploy/terraform
-        if [ "${{ github.event.inputs.destroy_and_recreate }}" = "true" ]; then
+        if [ "${{ github.event.inputs.deployment_mode }}" = "recreate" ]; then
           echo "🔨 Creating fresh infrastructure..."
         else
           echo "📦 Deploying/updating infrastructure..."
@@ -180,42 +192,43 @@ jobs:
         terraform apply -auto-approve -var="aws_region=${{ env.AWS_REGION }}"
         echo "✅ Infrastructure ready"
 
-    # Update App Runner service to use the new image
+    # Trigger App Runner deployment
     - name: Deploy to App Runner
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
         IMAGE_TAG: ${{ env.IMAGE_TAG }}
+        DEPLOY_BRANCH: ${{ env.DEPLOY_BRANCH }}
       run: |
         # Get the service ARN
         SERVICE_ARN=$(aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='$ECR_REPOSITORY'].ServiceArn" --output text)
-        
+
         if [ -n "$SERVICE_ARN" ]; then
-          echo "App Runner service found: $SERVICE_ARN"
-          
+          echo "✅ App Runner service found: $SERVICE_ARN"
+
           # Check service status
           SERVICE_STATUS=$(aws apprunner describe-service --service-arn $SERVICE_ARN --query "Service.Status" --output text)
           echo "Current service status: $SERVICE_STATUS"
-          
-          if [ "$SERVICE_STATUS" = "RUNNING" ]; then
-            echo "Service is running, starting deployment..."
-            aws apprunner start-deployment --service-arn $SERVICE_ARN
-            
-            echo "Deployment started for service: $SERVICE_ARN"
-            echo "App Runner will automatically pull the latest image with tag: latest"
-            
-            # Wait for deployment to complete (optional)
-            echo "Waiting for deployment to complete..."
-            aws apprunner wait service-updated --service-arn $SERVICE_ARN
-            
-            # Get the service URL
-            SERVICE_URL=$(aws apprunner describe-service --service-arn $SERVICE_ARN --query "Service.ServiceUrl" --output text)
-            echo "Service deployed successfully!"
-            echo "Service URL: https://$SERVICE_URL"
-          elif [ "$SERVICE_STATUS" = "OPERATION_IN_PROGRESS" ]; then
+
+          if [ "$SERVICE_STATUS" = "OPERATION_IN_PROGRESS" ]; then
             echo "⚠️  Service is currently deploying or updating. Waiting for operation to complete..."
             aws apprunner wait service-updated --service-arn $SERVICE_ARN
-            echo "✅ Previous operation completed. Starting new deployment..."
-            aws apprunner start-deployment --service-arn $SERVICE_ARN
+            SERVICE_STATUS=$(aws apprunner describe-service --service-arn $SERVICE_ARN --query "Service.Status" --output text)
+            echo "Updated service status: $SERVICE_STATUS"
+          fi
+
+          if [ "$SERVICE_STATUS" = "RUNNING" ]; then
+            echo "🚀 Triggering App Runner deployment..."
+            echo "Image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+            
+            # Start deployment - App Runner will pull the latest image
+            aws apprunner start-deployment --service-arn "$SERVICE_ARN"
+            
+            echo "⏳ Waiting for deployment to complete..."
+            aws apprunner wait service-updated --service-arn "$SERVICE_ARN"
+
+            SERVICE_URL=$(aws apprunner describe-service --service-arn $SERVICE_ARN --query "Service.ServiceUrl" --output text)
+            echo "✅ Service deployed successfully!"
+            echo "🌐 Service URL: https://$SERVICE_URL"
           elif [ "$SERVICE_STATUS" = "CREATE_FAILED" ] || [ "$SERVICE_STATUS" = "DELETE_FAILED" ]; then
             echo "❌ Service is in $SERVICE_STATUS state. Please check AWS Console and fix the issue."
             echo "Service ARN: $SERVICE_ARN"
@@ -227,13 +240,15 @@ jobs:
             exit 1
           fi
         else
-          echo "App Runner service does not exist. Please run terraform apply first or set deploy_infrastructure to true."
+          echo "❌ App Runner service does not exist."
+          echo "💡 Use deployment_mode: 'apply' or 'recreate' to create infrastructure."
           exit 1
         fi
 
     - name: Output deployment info
       env:
         ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ env.IMAGE_TAG }}
       run: |
         echo "Image built and pushed: $ECR_REGISTRY/$ECR_REPOSITORY:${{ env.IMAGE_TAG }}"
         

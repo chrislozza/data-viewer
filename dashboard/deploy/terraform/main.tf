@@ -91,6 +91,7 @@ resource "aws_iam_role_policy" "apprunner_instance_policy" {
 resource "aws_ecr_repository" "app_repository" {
   name                 = var.app_name
   image_tag_mutability = "MUTABLE"
+  force_delete         = true
 
   image_scanning_configuration {
     scan_on_push = true
@@ -173,7 +174,7 @@ resource "aws_apprunner_service" "dashboard_service" {
 
 # Auto Scaling Configuration
 resource "aws_apprunner_auto_scaling_configuration_version" "dashboard_autoscaling" {
-  auto_scaling_configuration_name = "dv-dashboard-autoscaling"
+  auto_scaling_configuration_name = "${var.app_name}-autoscaling"
   
   max_concurrency = var.max_concurrency
   max_size        = var.max_size
