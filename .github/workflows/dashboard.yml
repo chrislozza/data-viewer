@@ -147,6 +147,22 @@ jobs:
         rm -rf .tmp/service-client.json .tmp/
         echo "🧹 Credentials file cleaned up"
 
+    - name: Verify ECR image
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        IMAGE_TAG: ${{ env.IMAGE_TAG }}
+      run: |
+        echo "Verifying image exists in ECR..."
+        aws ecr describe-images --repository-name $ECR_REPOSITORY --image-ids imageTag=latest || {
+          echo "❌ Error: latest tag not found in ECR"
+          exit 1
+        }
+        aws ecr describe-images --repository-name $ECR_REPOSITORY --image-ids imageTag=$IMAGE_TAG || {
+          echo "❌ Error: $IMAGE_TAG not found in ECR"
+          exit 1
+        }
+        echo "✅ Images verified in ECR"
+
     # Deploy infrastructure with Terraform (optional, controlled by workflow input)
     - name: Setup Terraform
       if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deployment_mode != 'image-only' }}
@@ -160,6 +176,16 @@ jobs:
         cd dashboard/deploy/terraform
         terraform init
         
+        # Delete any failed App Runner services
+        FAILED_SERVICE=$(aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='data-viewer-dashboard' && Status=='CREATE_FAILED'].ServiceArn" --output text)
+        if [ -n "$FAILED_SERVICE" ]; then
+          echo "⚠️  Found failed App Runner service, deleting: $FAILED_SERVICE"
+          aws apprunner delete-service --service-arn "$FAILED_SERVICE"
+          echo "Waiting for service deletion..."
+          aws apprunner wait service-deleted --service-arn "$FAILED_SERVICE" || true
+          sleep 10
+        fi
+        
         # Import existing resources if they exist (ignore errors if they don't)
         terraform import aws_iam_role.apprunner_instance_role data-viewer-dashboard-apprunner-instance-role 2>/dev/null || true
         terraform import aws_iam_role.apprunner_access_role data-viewer-dashboard-apprunner-access-role 2>/dev/null || true
@@ -167,6 +193,7 @@ jobs:
         terraform import aws_iam_role_policy_attachment.apprunner_access_role_ecr data-viewer-dashboard-apprunner-access-role/arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess 2>/dev/null || true
         terraform import aws_ecr_repository.app_repository data-viewer-dashboard 2>/dev/null || true
         terraform import aws_ecr_lifecycle_policy.app_repository_policy data-viewer-dashboard 2>/dev/null || true
+        terraform import aws_apprunner_auto_scaling_configuration_version.dashboard_autoscaling dv-dashboard-autoscale/1/* 2>/dev/null || true
 
     - name: Terraform Destroy (if recreating)
       if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deployment_mode == 'recreate' }}
