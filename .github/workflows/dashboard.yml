@@ -117,6 +117,7 @@ jobs:
         
         # Build with buildx and load into local docker
         docker buildx build \
+          --no-cache \
           --progress=plain \
           --load \
           --platform linux/amd64 \
