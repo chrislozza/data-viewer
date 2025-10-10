@@ -75,9 +75,7 @@ runs:
       run: |
         set -euo pipefail
         mkdir -p .tmp
-        cat <<'EOF' > .tmp/service-client.json
-${GCP_SERVICE_ACCOUNT_KEY}
-EOF
+        printf '%s' "${GCP_SERVICE_ACCOUNT_KEY}" > .tmp/service-client.json
         if [ ! -s .tmp/service-client.json ]; then
           echo "Failed to create GCP credentials file" >&2
           exit 1
