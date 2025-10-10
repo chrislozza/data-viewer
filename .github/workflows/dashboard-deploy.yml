@@ -175,6 +175,50 @@ jobs:
           db-password: ${{ secrets.db-password }}
           operation: recreate
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.aws-access-key-id }}
+          aws-secret-access-key: ${{ secrets.aws-secret-access-key }}
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: Wait for service to be ready
+        shell: bash
+        env:
+          ECR_REPOSITORY: ${{ inputs.ecr-repository }}
+        run: |
+          set -euo pipefail
+          echo "Waiting for App Runner service to be created and ready..."
+          
+          # Wait for service to exist
+          for i in {1..30}; do
+            SERVICE_ARN=$(aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='${ECR_REPOSITORY}'].ServiceArn" --output text || echo "")
+            if [ -n "$SERVICE_ARN" ]; then
+              echo "Service found: $SERVICE_ARN"
+              break
+            fi
+            echo "Waiting for service to appear... (attempt $i/30)"
+            sleep 10
+          done
+          
+          if [ -z "$SERVICE_ARN" ]; then
+            echo "Service not found after waiting" >&2
+            exit 1
+          fi
+          
+          # Wait for service to be running
+          echo "Waiting for service to reach RUNNING state..."
+          aws apprunner wait service-updated --service-arn "$SERVICE_ARN" || true
+          
+          SERVICE_STATUS=$(aws apprunner describe-service --service-arn "$SERVICE_ARN" --query "Service.Status" --output text)
+          echo "Service status: $SERVICE_STATUS"
+          
+          if [ "$SERVICE_STATUS" = "RUNNING" ]; then
+            echo "✅ Service is ready"
+          else
+            echo "⚠️ Service status is $SERVICE_STATUS, proceeding anyway"
+          fi
+
       - name: Deploy latest image to App Runner
         uses: ./.github/actions/dashboard-apprunner-deploy
         with:

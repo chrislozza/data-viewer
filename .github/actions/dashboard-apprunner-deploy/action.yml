@@ -60,8 +60,29 @@ runs:
         fi
 
         if [ "$SERVICE_STATUS" != "RUNNING" ]; then
-          echo "Service is not in RUNNING state (current: $SERVICE_STATUS)" >&2
-          exit 1
+          echo "⚠️  Service is not in RUNNING state (current: $SERVICE_STATUS)"
+          echo "Waiting up to 5 minutes for service to become RUNNING..."
+          
+          for i in {1..30}; do
+            sleep 10
+            SERVICE_STATUS=$(aws apprunner describe-service --service-arn "$SERVICE_ARN" --query "Service.Status" --output text)
+            echo "  Status check $i/30: $SERVICE_STATUS"
+            
+            if [ "$SERVICE_STATUS" = "RUNNING" ]; then
+              echo "✅ Service is now RUNNING"
+              break
+            elif [ "$SERVICE_STATUS" = "OPERATION_IN_PROGRESS" ]; then
+              continue
+            else
+              echo "❌ Service is in unexpected state: $SERVICE_STATUS" >&2
+              exit 1
+            fi
+          done
+          
+          if [ "$SERVICE_STATUS" != "RUNNING" ]; then
+            echo "❌ Service did not reach RUNNING state after waiting" >&2
+            exit 1
+          fi
         fi
 
         echo "Triggering App Runner deployment for $SERVICE_ARN"
