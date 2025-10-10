@@ -21,40 +21,14 @@ on:
           - recreate
 
 jobs:
-  prepare:
-    name: Determine deployment inputs
-    runs-on: ubuntu-latest
-    outputs:
-      target_branch: ${{ steps.set-vars.outputs.target_branch }}
-      deployment_mode: ${{ steps.set-vars.outputs.deployment_mode }}
-      aws_region: ${{ steps.set-vars.outputs.aws_region }}
-      ecr_repository: ${{ steps.set-vars.outputs.ecr_repository }}
-    steps:
-      - id: set-vars
-        name: Set branch and mode
-        env:
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-          ECR_REPOSITORY: data-viewer-dashboard
-        run: |
-          BRANCH="${{ github.ref_name }}"
-          MODE="replace"
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.deployment_mode }}" ]; then
-            MODE="${{ github.event.inputs.deployment_mode }}"
-          fi
-          echo "target_branch=$BRANCH" >> "$GITHUB_OUTPUT"
-          echo "deployment_mode=$MODE" >> "$GITHUB_OUTPUT"
-          echo "aws_region=$AWS_REGION" >> "$GITHUB_OUTPUT"
-          echo "ecr_repository=$ECR_REPOSITORY" >> "$GITHUB_OUTPUT"
-
   deploy:
     name: Run dashboard deployment pipeline
-    needs: prepare
     uses: ./.github/workflows/dashboard-deploy.yml
     with:
-      target-branch: ${{ needs.prepare.outputs.target_branch }}
-      deployment-mode: ${{ needs.prepare.outputs.deployment_mode }}
-      aws-region: ${{ needs.prepare.outputs.aws_region }}
-      ecr-repository: ${{ needs.prepare.outputs.ecr_repository }}
+      target-branch: ${{ github.ref_name }}
+      deployment-mode: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deployment_mode || 'replace' }}
+      aws-region: ${{ vars.AWS_REGION }}
+      ecr-repository: data-viewer-dashboard
     secrets:
       aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
       aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
