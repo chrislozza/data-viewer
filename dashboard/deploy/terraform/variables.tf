@@ -82,6 +82,12 @@ variable "environment_variables" {
   }
 }
 
+variable "config_bucket_name" {
+  description = "S3 bucket name for configuration files"
+  type        = string
+  default     = "data-viewer-config"
+}
+
 variable "tags" {
   description = "Tags to apply to resources"
   type        = map(string)

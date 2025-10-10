@@ -19,5 +19,3 @@ run:
       value: "savvy-nimbus-306111:europe-west2:vibgo-sql"
     - name: CLOUD_SQL_PORT
       value: "5433"
-    - name: DB_PASSWORD
-      value: "REPLACE_WITH_YOUR_DB_PASSWORD"

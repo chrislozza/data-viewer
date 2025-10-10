@@ -12,14 +12,6 @@ use tracing_subscriber::layer::{Context, SubscriberExt};
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::util::SubscriberInitExt;
 
-use crate::settings::Settings;
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub(crate) struct LogCfg {
-    log_group: String,
-    log_stream: String,
-    level: String,
-}
 
 #[derive(Debug, Serialize)]
 #[serde(untagged)]
@@ -197,18 +189,26 @@ where
     }
 }
 
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct LoggingConfig {
+    pub log_group: String,
+    pub log_stream: String,
+    pub level: String,
+}
+
 // Function to set up the tracing subscriber with CloudWatch
-pub(crate) fn init_cloudwatch_logger(settings: &Settings) -> anyhow::Result<()> {
+pub fn init_cloudwatch_logger(settings: &LoggingConfig) -> anyhow::Result<()> {
     let cloudwatch_layer = CloudWatchLayer::new(
-        settings.logging.log_group.to_string(),
-        settings.logging.log_stream.to_string(),
+        settings.log_group.to_string(),
+        settings.log_stream.to_string(),
         10,
     );
 
     // Create console output layer
     let fmt_layer = tracing_subscriber::fmt::layer().with_target(true);
 
-    let level = tracing::Level::from_str(&settings.logging.level).unwrap_or(tracing::Level::INFO);
+    let level = tracing::Level::from_str(&settings.level).unwrap_or(tracing::Level::INFO);
     // Register both layers with the subscriber
     let _ = tracing_subscriber::registry()
         .with(cloudwatch_layer.with_filter(tracing_subscriber::filter::LevelFilter::from_level(level)))

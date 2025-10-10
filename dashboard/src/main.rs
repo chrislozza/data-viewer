@@ -4,8 +4,8 @@ use axum::{
     routing::get,
 };
 use clap::Parser;
-use common::db_client::{self, DBClient};
-use common::settings::{Settings, SettingsReader};
+use common::{aws_logging, db_client::{self, DBClient}, load_settings_from_s3, settings::SettingsReader};
+use models::settings::Settings;
 use serde_json::to_string;
 use std::sync::Arc;
 use tokio::signal;
@@ -17,11 +17,16 @@ mod service;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::services::ServeDir;
 
+const S3_STORED_SETTINGS: &str = "settings.json";
+
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct Args {
     #[arg(short, long)]
-    settings: String,
+    settings: Option<String>,
+    
+    #[arg(long)]
+    frontend: Option<String>,
 }
 
 fn graceful_shutdown(is_graceful_shutdown: &mut bool, shutdown_signal: &CancellationToken) {
@@ -39,16 +44,22 @@ async fn main() {
     let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate()).unwrap();
 
     let cmdline_args = Args::parse();
-    let settings: Settings = match SettingsReader::read_config_file(cmdline_args.settings.as_str()) {
-        Err(val) => {
-            println!("Settings file: {} error: {}", cmdline_args.settings, val);
-            std::process::exit(1);
+    let settings = match cmdline_args.settings {
+        Some(settings) => {
+           SettingsReader::read_config_file::<Settings>(&settings).unwrap() 
+        },
+        None => {
+            load_settings_from_s3::<Settings>(S3_STORED_SETTINGS).await
         }
-        Ok(val) => val,
+    };
+    
+    let frontend_path = match cmdline_args.frontend {
+        Some(settings) => settings,
+        None => "frontend".to_string(),
     };
 
     let cancel_token = CancellationToken::new();
-    let _ = common::Init::logging(&settings.log_level)
+    aws_logging::init_cloudwatch_logger(&settings.logging)
         .expect("Failed to start logging");
 
     let version = env!("CARGO_PKG_VERSION");
@@ -60,7 +71,7 @@ async fn main() {
         &to_string(&settings).expect("Failed to parse settings to json")
     );
 
-    let db = db_client::startup_db(&settings).await;
+    let db = db_client::startup_db(&settings.database).await;
 
     let state = Arc::new(AppState { db });
 
@@ -78,7 +89,7 @@ async fn main() {
         .route("/performance", get(service::performance))
         .with_state(state)
         .layer(cors)
-        .fallback_service(ServeDir::new("frontend"));
+        .fallback_service(ServeDir::new(frontend_path).append_index_html_on_directories(true));
 
     let addr = std::net::SocketAddr::from(([127, 0, 0, 1], 8000));
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();

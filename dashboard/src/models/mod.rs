@@ -9,6 +9,7 @@ pub(super) mod performance;
 pub(super) mod riskdata;
 pub(super) mod strategy;
 pub(super) mod symbol;
+pub(super) mod settings;
 
 fn get_alias(symbol: &str) -> String {
     if symbol.starts_with("/") {
