@@ -112,6 +112,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target-branch }}
+
       - name: Trigger App Runner deployment
         uses: ./.github/actions/dashboard-apprunner-deploy
         with:
@@ -127,6 +132,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target-branch }}
+
       - name: Apply Terraform changes
         uses: ./.github/actions/dashboard-terraform
         with:
@@ -151,6 +161,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target-branch }}
+
       - name: Recreate infrastructure
         uses: ./.github/actions/dashboard-terraform
         with:
