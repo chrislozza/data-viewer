@@ -9,7 +9,6 @@ use sqlx::postgres::PgPoolOptions;
 use std::env;
 use tracing::info;
 
-use super::settings::Settings;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DatabaseConfig {
@@ -19,7 +18,7 @@ pub struct DatabaseConfig {
     pub user: String,
 }
 
-pub async fn startup_db(settings: &Settings) -> DBClient {
+pub async fn startup_db(settings: &DatabaseConfig) -> DBClient {
     match DBClient::new(settings).await {
         Err(val) => {
             info!("Settings file error: {val}");
@@ -99,8 +98,8 @@ pub struct DBClient {
 }
 
 impl DBClient {
-    pub async fn new(settings: &Settings) -> Result<Self> {
-        let db_cfg = &settings.database;
+    pub async fn new(settings: &DatabaseConfig) -> Result<Self> {
+        let db_cfg = &settings;
         let dbpass =
             env::var("DB_PASSWORD").expect("Failed to read the 'dbpass' environment variable.");
         let database_url = format!(

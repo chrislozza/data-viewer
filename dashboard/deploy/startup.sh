@@ -52,4 +52,4 @@ fi
 
 # Start the Rust application
 echo "Starting Data Viewer application..."
-exec ./data-viewer --settings config.json
+exec ./data-viewer

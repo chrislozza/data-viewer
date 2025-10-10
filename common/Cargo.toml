@@ -5,9 +5,9 @@ edition = "2024"
 
 
 [dependencies]
-anyhow = "1.0.99"
-serde = { version = "1.0.219", features = ["derive"] }
-serde_json = { version = "1.0.143", features = ["raw_value"] }
+anyhow = "1.0.100"
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = { version = "1.0.145", features = ["raw_value"] }
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["fmt", "std", "json"] }
 chrono = { version = "0.4.42", features = ["serde"] }
@@ -26,7 +26,9 @@ tokio = { version = "1.47.1", features = [
     "tracing",
 ] }
 
-aws-config = { version = "1.8.6", features = ["behavior-version-latest"] }
-aws-sdk-cloudwatchlogs = { version = "1.103.0", features = [
+aws-config = { version = "1.8.7", features = ["behavior-version-latest"] }
+aws-sdk-cloudwatchlogs = { version = "1.104.0", features = [
     "behavior-version-latest",
 ] }
+aws-sdk-s3 = { version = "1.107.0", features = ["behavior-version-latest"] }
+aws-sdk-ssm = { version = "1.95.0", features = ["behavior-version-latest"] }
