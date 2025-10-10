@@ -1,0 +1,64 @@
+name: Deploy Dashboard to AWS App Runner
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'dashboard/**'
+      - 'common/**'
+      - '.github/workflows/dashboard.yml'
+  workflow_dispatch:
+    inputs:
+      target_branch:
+        description: 'Branch to deploy'
+        required: true
+        default: 'main'
+        type: string
+      deployment_mode:
+        description: 'Select deployment mode'
+        required: true
+        default: 'replace'
+        type: choice
+        options:
+          - replace
+          - apply
+          - recreate
+
+jobs:
+  prepare:
+    name: Determine deployment inputs
+    runs-on: ubuntu-latest
+    outputs:
+      target_branch: ${{ steps.set-vars.outputs.target_branch }}
+      deployment_mode: ${{ steps.set-vars.outputs.deployment_mode }}
+      aws_region: ${{ steps.set-vars.outputs.aws_region }}
+      ecr_repository: ${{ steps.set-vars.outputs.ecr_repository }}
+    steps:
+      - id: set-vars
+        name: Set branch and mode
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "target_branch=${{ github.event.inputs.target_branch }}" >> "$GITHUB_OUTPUT"
+            echo "deployment_mode=${{ github.event.inputs.deployment_mode }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "target_branch=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            echo "deployment_mode=replace" >> "$GITHUB_OUTPUT"
+          fi
+          echo "aws_region=${{ secrets.AWS_REGION }}" >> "$GITHUB_OUTPUT"
+          echo "ecr_repository=data-viewer-dashboard" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Run dashboard deployment pipeline
+    needs: prepare
+    uses: ./.github/workflows/dashboard-deploy.yml
+    with:
+      target-branch: ${{ needs.prepare.outputs.target_branch }}
+      deployment-mode: ${{ needs.prepare.outputs.deployment_mode }}
+      aws-region: ${{ needs.prepare.outputs.aws_region }}
+      ecr-repository: ${{ needs.prepare.outputs.ecr_repository }}
+    secrets:
+      aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      gcp-service-account-key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+      db-password: ${{ secrets.DB_PASSWORD }}

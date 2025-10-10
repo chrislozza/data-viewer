@@ -33,8 +33,7 @@ WORKDIR /app
 # Copy the built binary
 COPY --from=builder /app/target/x86_64-unknown-linux-musl/release/data-viewer /app/data-viewer
 
-# Copy configuration file
-COPY dashboard/config.json /app/config.json
+# Configuration is fetched at runtime from S3, so no static config file is copied
 
 # Copy frontend assets if they exist
 COPY --from=builder /app/dashboard/src/frontend/ /app/frontend/

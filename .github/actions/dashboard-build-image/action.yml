@@ -1,0 +1,162 @@
+name: Build Dashboard Image
+description: Build and push the dashboard container image to Amazon ECR.
+
+inputs:
+  aws-region:
+    description: AWS region for the target ECR repository
+    required: true
+  ecr-repository:
+    description: Name of the ECR repository to push to
+    required: true
+  aws-access-key-id:
+    description: AWS access key ID with permissions for ECR and App Runner
+    required: true
+  aws-secret-access-key:
+    description: AWS secret access key with permissions for ECR and App Runner
+    required: true
+  gcp-service-account-key:
+    description: JSON service account used for dashboard build-time assets
+    required: true
+  dockerfile:
+    description: Path to the Dockerfile to build
+    required: false
+    default: dashboard/deploy/Dockerfile
+  build-context:
+    description: Build context passed to Docker
+    required: false
+    default: .
+  image-tag:
+    description: Image tag to publish for the immutable build
+    required: true
+  branch-tag:
+    description: Branch tag to publish alongside the immutable tag
+    required: true
+  push-branch-tag:
+    description: Whether to push the branch tag variant
+    required: false
+    default: 'true'
+  push-latest:
+    description: Whether to push the `latest` tag variant
+    required: false
+    default: 'false'
+
+outputs:
+  image:
+    description: Fully qualified ECR image URI that was published
+    value: ${{ steps.build-image.outputs.image }}
+  image-tag:
+    description: Image tag used for the immutable build
+    value: ${{ steps.build-image.outputs.image_tag }}
+  registry:
+    description: Registry endpoint for the target ECR repository
+    value: ${{ steps.login-ecr.outputs.registry }}
+
+runs:
+  using: composite
+  steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ inputs.aws-access-key-id }}
+        aws-secret-access-key: ${{ inputs.aws-secret-access-key }}
+        aws-region: ${{ inputs.aws-region }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Create GCP credentials file
+      shell: bash
+      env:
+        GCP_SERVICE_ACCOUNT_KEY: ${{ inputs.gcp-service-account-key }}
+      run: |
+        set -euo pipefail
+        mkdir -p .tmp
+        cat <<'EOF' > .tmp/service-client.json
+${GCP_SERVICE_ACCOUNT_KEY}
+EOF
+        if [ ! -s .tmp/service-client.json ]; then
+          echo "Failed to create GCP credentials file" >&2
+          exit 1
+        fi
+
+    - name: Build, tag, and push image
+      id: build-image
+      shell: bash
+      env:
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ inputs.ecr-repository }}
+        DOCKERFILE: ${{ inputs.dockerfile }}
+        BUILD_CONTEXT: ${{ inputs.build-context }}
+        IMAGE_TAG: ${{ inputs.image-tag }}
+        BRANCH_TAG: ${{ inputs.branch-tag }}
+        PUSH_BRANCH_TAG: ${{ inputs.push-branch-tag }}
+        PUSH_LATEST: ${{ inputs.push-latest }}
+      run: |
+        set -euo pipefail
+        if [ ! -f .tmp/service-client.json ]; then
+          echo "Missing .tmp/service-client.json" >&2
+          exit 1
+        fi
+
+        echo "Building Docker image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+        docker buildx build \
+          --progress plain \
+          --load \
+          --platform linux/amd64 \
+          -f "$DOCKERFILE" \
+          -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" \
+          "$BUILD_CONTEXT"
+
+        if [ "${PUSH_BRANCH_TAG}" = "true" ] && [ -n "$BRANCH_TAG" ]; then
+          docker tag "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" "$ECR_REGISTRY/$ECR_REPOSITORY:$BRANCH_TAG"
+        fi
+
+        if [ "${PUSH_LATEST}" = "true" ]; then
+          docker tag "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+        fi
+
+        echo "Pushing immutable tag: $IMAGE_TAG"
+        docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+        if [ "${PUSH_BRANCH_TAG}" = "true" ] && [ -n "$BRANCH_TAG" ]; then
+          echo "Pushing branch tag: $BRANCH_TAG"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$BRANCH_TAG"
+        fi
+
+        if [ "${PUSH_LATEST}" = "true" ]; then
+          echo "Pushing latest tag"
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:latest"
+        fi
+
+        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+        echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+
+    - name: Verify ECR images
+      shell: bash
+      env:
+        AWS_REGION: ${{ inputs.aws-region }}
+        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+        ECR_REPOSITORY: ${{ inputs.ecr-repository }}
+        IMAGE_TAG: ${{ inputs.image-tag }}
+        BRANCH_TAG: ${{ inputs.branch-tag }}
+        PUSH_BRANCH_TAG: ${{ inputs.push-branch-tag }}
+        PUSH_LATEST: ${{ inputs.push-latest }}
+      run: |
+        set -euo pipefail
+        aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids imageTag="$IMAGE_TAG"
+        if [ "${PUSH_BRANCH_TAG}" = "true" ] && [ -n "$BRANCH_TAG" ]; then
+          aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids imageTag="$BRANCH_TAG"
+        fi
+        if [ "${PUSH_LATEST}" = "true" ]; then
+          aws ecr describe-images --repository-name "$ECR_REPOSITORY" --image-ids imageTag="latest"
+        fi
+
+    - name: Cleanup credentials
+      if: always()
+      shell: bash
+      run: |
+        rm -rf .tmp/service-client.json .tmp/
