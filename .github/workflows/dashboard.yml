@@ -32,6 +32,9 @@ jobs:
     steps:
       - id: set-vars
         name: Set branch and mode
+        env:
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          ECR_REPOSITORY: data-viewer-dashboard
         run: |
           BRANCH="${{ github.ref_name }}"
           MODE="replace"
@@ -40,8 +43,8 @@ jobs:
           fi
           echo "target_branch=$BRANCH" >> "$GITHUB_OUTPUT"
           echo "deployment_mode=$MODE" >> "$GITHUB_OUTPUT"
-          echo "aws_region=${{ secrets.AWS_REGION }}" >> "$GITHUB_OUTPUT"
-          echo "ecr_repository=data-viewer-dashboard" >> "$GITHUB_OUTPUT"
+          echo "aws_region=$AWS_REGION" >> "$GITHUB_OUTPUT"
+          echo "ecr_repository=$ECR_REPOSITORY" >> "$GITHUB_OUTPUT"
 
   deploy:
     name: Run dashboard deployment pipeline
