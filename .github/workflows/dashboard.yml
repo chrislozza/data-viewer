@@ -10,11 +10,6 @@ on:
       - '.github/workflows/dashboard.yml'
   workflow_dispatch:
     inputs:
-      target_branch:
-        description: 'Branch to deploy'
-        required: true
-        default: 'main'
-        type: string
       deployment_mode:
         description: 'Select deployment mode'
         required: true
@@ -38,13 +33,13 @@ jobs:
       - id: set-vars
         name: Set branch and mode
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "target_branch=${{ github.event.inputs.target_branch }}" >> "$GITHUB_OUTPUT"
-            echo "deployment_mode=${{ github.event.inputs.deployment_mode }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "target_branch=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
-            echo "deployment_mode=replace" >> "$GITHUB_OUTPUT"
+          BRANCH="${{ github.ref_name }}"
+          MODE="replace"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.deployment_mode }}" ]; then
+            MODE="${{ github.event.inputs.deployment_mode }}"
           fi
+          echo "target_branch=$BRANCH" >> "$GITHUB_OUTPUT"
+          echo "deployment_mode=$MODE" >> "$GITHUB_OUTPUT"
           echo "aws_region=${{ secrets.AWS_REGION }}" >> "$GITHUB_OUTPUT"
           echo "ecr_repository=data-viewer-dashboard" >> "$GITHUB_OUTPUT"
 
