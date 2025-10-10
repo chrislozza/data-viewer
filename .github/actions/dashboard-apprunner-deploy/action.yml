@@ -1,0 +1,77 @@
+name: Deploy Dashboard App Runner Service
+description: Trigger an App Runner deployment using the latest image in ECR.
+
+inputs:
+  aws-region:
+    description: AWS region where the App Runner service is hosted
+    required: true
+  ecr-repository:
+    description: Name of the App Runner and ECR repository
+    required: true
+  aws-access-key-id:
+    description: AWS access key ID with App Runner permissions
+    required: true
+  aws-secret-access-key:
+    description: AWS secret access key with App Runner permissions
+    required: true
+  wait-for-completion:
+    description: Whether to wait for the deployment to finish before completing
+    required: false
+    default: 'true'
+
+outputs:
+  service-arn:
+    description: ARN of the App Runner service that was deployed
+    value: ${{ steps.deploy.outputs.service_arn }}
+  service-url:
+    description: URL of the App Runner service after deployment
+    value: ${{ steps.deploy.outputs.service_url }}
+
+runs:
+  using: composite
+  steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ inputs.aws-access-key-id }}
+        aws-secret-access-key: ${{ inputs.aws-secret-access-key }}
+        aws-region: ${{ inputs.aws-region }}
+
+    - name: Deploy App Runner service
+      id: deploy
+      shell: bash
+      env:
+        AWS_REGION: ${{ inputs.aws-region }}
+        ECR_REPOSITORY: ${{ inputs.ecr-repository }}
+        WAIT_FOR_COMPLETION: ${{ inputs.wait-for-completion }}
+      run: |
+        set -euo pipefail
+        SERVICE_ARN=$(aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='${ECR_REPOSITORY}'].ServiceArn" --output text)
+        if [ -z "$SERVICE_ARN" ]; then
+          echo "App Runner service '${ECR_REPOSITORY}' not found" >&2
+          exit 1
+        fi
+
+        SERVICE_STATUS=$(aws apprunner describe-service --service-arn "$SERVICE_ARN" --query "Service.Status" --output text)
+        if [ "$SERVICE_STATUS" = "OPERATION_IN_PROGRESS" ]; then
+          echo "Service update already in progress. Waiting for completion..."
+          aws apprunner wait service-updated --service-arn "$SERVICE_ARN"
+          SERVICE_STATUS=$(aws apprunner describe-service --service-arn "$SERVICE_ARN" --query "Service.Status" --output text)
+        fi
+
+        if [ "$SERVICE_STATUS" != "RUNNING" ]; then
+          echo "Service is not in RUNNING state (current: $SERVICE_STATUS)" >&2
+          exit 1
+        fi
+
+        echo "Triggering App Runner deployment for $SERVICE_ARN"
+        aws apprunner start-deployment --service-arn "$SERVICE_ARN"
+
+        if [ "$WAIT_FOR_COMPLETION" = "true" ]; then
+          echo "Waiting for deployment to finish..."
+          aws apprunner wait service-updated --service-arn "$SERVICE_ARN"
+        fi
+
+        SERVICE_URL=$(aws apprunner describe-service --service-arn "$SERVICE_ARN" --query "Service.ServiceUrl" --output text)
+        echo "service_arn=$SERVICE_ARN" >> "$GITHUB_OUTPUT"
+        echo "service_url=$SERVICE_URL" >> "$GITHUB_OUTPUT"

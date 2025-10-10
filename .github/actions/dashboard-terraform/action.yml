@@ -1,0 +1,98 @@
+name: Manage Dashboard Terraform
+description: Run Terraform operations for the dashboard App Runner infrastructure.
+
+inputs:
+  aws-region:
+    description: AWS region where the infrastructure resides
+    required: true
+  aws-access-key-id:
+    description: AWS access key ID with permissions for Terraform-managed resources
+    required: true
+  aws-secret-access-key:
+    description: AWS secret access key with permissions for Terraform-managed resources
+    required: true
+  db-password:
+    description: Database password passed to Terraform as TF_VAR_db_password
+    required: false
+  operation:
+    description: Terraform operation to execute (apply | destroy | recreate)
+    required: true
+  working-directory:
+    description: Directory containing Terraform configuration
+    required: false
+    default: dashboard/deploy/terraform
+
+runs:
+  using: composite
+  steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        aws-access-key-id: ${{ inputs.aws-access-key-id }}
+        aws-secret-access-key: ${{ inputs.aws-secret-access-key }}
+        aws-region: ${{ inputs.aws-region }}
+
+    - name: Set up Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.6.0
+
+    - name: Run Terraform
+      shell: bash
+      env:
+        AWS_REGION: ${{ inputs.aws-region }}
+        OPERATION: ${{ inputs.operation }}
+        WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        TF_VAR_db_password: ${{ inputs.db-password }}
+      run: |
+        set -euo pipefail
+
+        if [[ "$OPERATION" != "apply" && "$OPERATION" != "destroy" && "$OPERATION" != "recreate" ]]; then
+          echo "Unsupported Terraform operation: $OPERATION" >&2
+          exit 1
+        fi
+
+        cd "$WORKING_DIRECTORY"
+
+        echo "Initializing Terraform..."
+        terraform init -input=false
+
+        echo "Importing existing resources (best effort)..."
+        terraform import aws_iam_role.apprunner_instance_role data-viewer-dashboard-apprunner-instance-role >/dev/null 2>&1 || true
+        terraform import aws_iam_role.apprunner_access_role data-viewer-dashboard-apprunner-access-role >/dev/null 2>&1 || true
+        terraform import aws_iam_role_policy.apprunner_instance_policy data-viewer-dashboard-apprunner-instance-role:data-viewer-dashboard-apprunner-instance-policy >/dev/null 2>&1 || true
+        terraform import aws_iam_role_policy_attachment.apprunner_access_role_ecr data-viewer-dashboard-apprunner-access-role/arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess >/dev/null 2>&1 || true
+        terraform import aws_ecr_repository.app_repository data-viewer-dashboard >/dev/null 2>&1 || true
+        terraform import aws_ecr_lifecycle_policy.app_repository_policy data-viewer-dashboard >/dev/null 2>&1 || true
+        terraform import aws_apprunner_auto_scaling_configuration_version.dashboard_autoscaling dv-dashboard-autoscale/1/* >/dev/null 2>&1 || true
+
+        if [[ "$OPERATION" == "destroy" || "$OPERATION" == "recreate" ]]; then
+          echo "Destroying existing App Runner service (preserving ECR repository)..."
+          terraform destroy -auto-approve \
+            -target=aws_apprunner_service.dashboard_service \
+            -var="aws_region=$AWS_REGION"
+        fi
+
+        if [[ "$OPERATION" == "apply" || "$OPERATION" == "recreate" ]]; then
+          if [[ -z "$TF_VAR_db_password" ]]; then
+            echo "db-password input is required for apply/recreate operations" >&2
+            exit 1
+          fi
+
+          echo "Ensuring supporting resources exist (ECR, IAM, autoscaling)..."
+          terraform apply -auto-approve \
+            -target=aws_ecr_repository.app_repository \
+            -target=aws_ecr_lifecycle_policy.app_repository_policy \
+            -target=aws_iam_role.apprunner_instance_role \
+            -target=aws_iam_role_policy.apprunner_instance_policy \
+            -target=aws_iam_role.apprunner_access_role \
+            -target=aws_iam_role_policy_attachment.apprunner_access_role_ecr \
+            -target=aws_apprunner_auto_scaling_configuration_version.dashboard_autoscaling \
+            -var="aws_region=$AWS_REGION"
+
+          echo "Planning full apply..."
+          terraform plan -var="aws_region=$AWS_REGION"
+
+          echo "Applying full Terraform configuration..."
+          terraform apply -auto-approve -var="aws_region=$AWS_REGION"
+        fi

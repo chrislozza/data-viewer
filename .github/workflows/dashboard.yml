@@ -18,281 +18,47 @@ on:
       deployment_mode:
         description: 'Select deployment mode'
         required: true
-        default: 'image-only'
+        default: 'replace'
         type: choice
         options:
-          - image-only
+          - replace
           - apply
           - recreate
 
-env:
-  AWS_REGION: ${{ secrets.AWS_REGION }}
-  ECR_REPOSITORY: data-viewer-dashboard
-
 jobs:
-  build-and-deploy:
+  prepare:
+    name: Determine deployment inputs
     runs-on: ubuntu-latest
-    
+    outputs:
+      target_branch: ${{ steps.set-vars.outputs.target_branch }}
+      deployment_mode: ${{ steps.set-vars.outputs.deployment_mode }}
+      aws_region: ${{ steps.set-vars.outputs.aws_region }}
+      ecr_repository: ${{ steps.set-vars.outputs.ecr_repository }}
     steps:
-    - name: Checkout code (push events)
-      if: ${{ github.event_name != 'workflow_dispatch' }}
-      uses: actions/checkout@v4
-
-    - name: Checkout code (manual trigger)
-      if: ${{ github.event_name == 'workflow_dispatch' }}
-      uses: actions/checkout@v4
-      with:
-        ref: ${{ github.event.inputs.target_branch }}
-
-    - name: Determine branch and image tag
-      id: branch-info
-      run: |
-        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-          BRANCH="${{ github.event.inputs.target_branch }}"
-        else
-          BRANCH="${{ github.ref_name }}"
-        fi
-
-        echo "branch=$BRANCH" >> "$GITHUB_OUTPUT"
-        echo "DEPLOY_BRANCH=$BRANCH" >> "$GITHUB_ENV"
-        echo "IMAGE_TAG=$GITHUB_SHA" >> "$GITHUB_ENV"
-        echo "🚀 Deploying from branch: $BRANCH"
-        echo "📦 Image tag: $GITHUB_SHA"
-        if [ "$BRANCH" = "main" ]; then
-          echo "🎯 Production deployment"
-        else
-          echo "🧪 Branch deployment"
-        fi
-
-    - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v4
-      with:
-        aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: ${{ env.AWS_REGION }}
-
-    - name: Login to Amazon ECR
-      id: login-ecr
-      uses: aws-actions/amazon-ecr-login@v2
-
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
-
-    - name: Create GCP credentials file
-      run: |
-        mkdir -p .tmp
-        echo '${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}' > .tmp/service-client.json
-        
-        # Verify file was created
-        if [ -f .tmp/service-client.json ]; then
-          echo "✅ GCP credentials file created"
-          ls -la .tmp/
-          echo "File size: $(wc -c < .tmp/service-client.json) bytes"
-          echo "Working directory: $(pwd)"
-          echo "Contents of .dockerignore:"
-          cat .dockerignore | grep -A2 -B2 "tmp" || echo "No .tmp references in .dockerignore"
-        else
-          echo "❌ Failed to create credentials file"
-          exit 1
-        fi
-
-    - name: Build, tag, and push image to Amazon ECR
-      id: build-image
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        IMAGE_TAG: ${{ env.IMAGE_TAG }}
-        DEPLOY_BRANCH: ${{ env.DEPLOY_BRANCH }}
-      run: |
-        # Verify the credentials file exists
-        if [ ! -f .tmp/service-client.json ]; then
-          echo "❌ Error: .tmp/service-client.json not found"
-          exit 1
-        fi
-        
-        echo "📦 Building Docker image..."
-        
-        # List files to ensure .tmp/service-client.json is present
-        echo "Files in build context:"
-        ls -la .tmp/
-        
-        # Build with buildx and load into local docker
-        docker buildx build \
-          --no-cache \
-          --progress=plain \
-          --load \
-          --platform linux/amd64 \
-          -f dashboard/deploy/Dockerfile \
-          -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
-          -t $ECR_REGISTRY/$ECR_REPOSITORY:$DEPLOY_BRANCH \
-          .
-
-        echo "✅ Build complete"
-        echo "📤 Pushing images to ECR..."
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
-        docker push $ECR_REGISTRY/$ECR_REPOSITORY:$DEPLOY_BRANCH
-
-        # Only push 'latest' tag from main branch
-        if [ "$DEPLOY_BRANCH" = "main" ]; then
-          echo "Main branch detected - tagging as latest"
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:latest
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-        else
-          echo "Feature branch detected - skipping 'latest' tag"
-        fi
-        
-        echo "image=$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" >> $GITHUB_OUTPUT
-
-    - name: Cleanup credentials
-      if: always()
-      run: |
-        rm -rf .tmp/service-client.json .tmp/
-        echo "🧹 Credentials file cleaned up"
-
-    - name: Verify ECR image
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        IMAGE_TAG: ${{ env.IMAGE_TAG }}
-      run: |
-        echo "Verifying image exists in ECR..."
-        aws ecr describe-images --repository-name $ECR_REPOSITORY --image-ids imageTag=latest || {
-          echo "❌ Error: latest tag not found in ECR"
-          exit 1
-        }
-        aws ecr describe-images --repository-name $ECR_REPOSITORY --image-ids imageTag=$IMAGE_TAG || {
-          echo "❌ Error: $IMAGE_TAG not found in ECR"
-          exit 1
-        }
-        echo "✅ Images verified in ECR"
-
-    # Deploy infrastructure with Terraform (optional, controlled by workflow input)
-    - name: Setup Terraform
-      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deployment_mode != 'image-only' }}
-      uses: hashicorp/setup-terraform@v3
-      with:
-        terraform_version: 1.6.0
-
-    - name: Terraform Init
-      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deployment_mode != 'image-only' }}
-      run: |
-        cd dashboard/deploy/terraform
-        terraform init
-        
-        # Delete any failed App Runner services
-        FAILED_SERVICE=$(aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='data-viewer-dashboard' && Status=='CREATE_FAILED'].ServiceArn" --output text)
-        if [ -n "$FAILED_SERVICE" ]; then
-          echo "⚠️  Found failed App Runner service, deleting: $FAILED_SERVICE"
-          aws apprunner delete-service --service-arn "$FAILED_SERVICE"
-          echo "Waiting for service deletion..."
-          aws apprunner wait service-deleted --service-arn "$FAILED_SERVICE" || true
-          sleep 10
-        fi
-        
-        # Import existing resources if they exist (ignore errors if they don't)
-        terraform import aws_iam_role.apprunner_instance_role data-viewer-dashboard-apprunner-instance-role 2>/dev/null || true
-        terraform import aws_iam_role.apprunner_access_role data-viewer-dashboard-apprunner-access-role 2>/dev/null || true
-        terraform import aws_iam_role_policy.apprunner_instance_policy data-viewer-dashboard-apprunner-instance-role:data-viewer-dashboard-apprunner-instance-policy 2>/dev/null || true
-        terraform import aws_iam_role_policy_attachment.apprunner_access_role_ecr data-viewer-dashboard-apprunner-access-role/arn:aws:iam::aws:policy/service-role/AWSAppRunnerServicePolicyForECRAccess 2>/dev/null || true
-        terraform import aws_ecr_repository.app_repository data-viewer-dashboard 2>/dev/null || true
-        terraform import aws_ecr_lifecycle_policy.app_repository_policy data-viewer-dashboard 2>/dev/null || true
-        terraform import aws_apprunner_auto_scaling_configuration_version.dashboard_autoscaling dv-dashboard-autoscale/1/* 2>/dev/null || true
-
-    - name: Terraform Destroy (if recreating)
-      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deployment_mode == 'recreate' }}
-      env:
-        TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
-      run: |
-        cd dashboard/deploy/terraform
-        echo "⚠️  WARNING: Destroying existing infrastructure. URL will change!"
-        terraform destroy -auto-approve -var="aws_region=${{ env.AWS_REGION }}"
-        echo "✅ Infrastructure destroyed"
-
-    - name: Terraform Plan
-      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deployment_mode != 'image-only' }}
-      env:
-        TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
-      run: |
-        cd dashboard/deploy/terraform
-        terraform plan -var="aws_region=${{ env.AWS_REGION }}"
-
-    - name: Terraform Apply
-      if: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.deployment_mode != 'image-only' }}
-      env:
-        TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
-      run: |
-        cd dashboard/deploy/terraform
-        if [ "${{ github.event.inputs.deployment_mode }}" = "recreate" ]; then
-          echo "🔨 Creating fresh infrastructure..."
-        else
-          echo "📦 Deploying/updating infrastructure..."
-        fi
-        terraform apply -auto-approve -var="aws_region=${{ env.AWS_REGION }}"
-        echo "✅ Infrastructure ready"
-
-    # Trigger App Runner deployment
-    - name: Deploy to App Runner
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        IMAGE_TAG: ${{ env.IMAGE_TAG }}
-        DEPLOY_BRANCH: ${{ env.DEPLOY_BRANCH }}
-      run: |
-        # Get the service ARN
-        SERVICE_ARN=$(aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='$ECR_REPOSITORY'].ServiceArn" --output text)
-
-        if [ -n "$SERVICE_ARN" ]; then
-          echo "✅ App Runner service found: $SERVICE_ARN"
-
-          # Check service status
-          SERVICE_STATUS=$(aws apprunner describe-service --service-arn $SERVICE_ARN --query "Service.Status" --output text)
-          echo "Current service status: $SERVICE_STATUS"
-
-          if [ "$SERVICE_STATUS" = "OPERATION_IN_PROGRESS" ]; then
-            echo "⚠️  Service is currently deploying or updating. Waiting for operation to complete..."
-            aws apprunner wait service-updated --service-arn $SERVICE_ARN
-            SERVICE_STATUS=$(aws apprunner describe-service --service-arn $SERVICE_ARN --query "Service.Status" --output text)
-            echo "Updated service status: $SERVICE_STATUS"
-          fi
-
-          if [ "$SERVICE_STATUS" = "RUNNING" ]; then
-            echo "🚀 Triggering App Runner deployment..."
-            echo "Image: $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-            
-            # Start deployment - App Runner will pull the latest image
-            aws apprunner start-deployment --service-arn "$SERVICE_ARN"
-            
-            echo "⏳ Waiting for deployment to complete..."
-            aws apprunner wait service-updated --service-arn "$SERVICE_ARN"
-
-            SERVICE_URL=$(aws apprunner describe-service --service-arn $SERVICE_ARN --query "Service.ServiceUrl" --output text)
-            echo "✅ Service deployed successfully!"
-            echo "🌐 Service URL: https://$SERVICE_URL"
-          elif [ "$SERVICE_STATUS" = "CREATE_FAILED" ] || [ "$SERVICE_STATUS" = "DELETE_FAILED" ]; then
-            echo "❌ Service is in $SERVICE_STATUS state. Please check AWS Console and fix the issue."
-            echo "Service ARN: $SERVICE_ARN"
-            exit 1
+      - id: set-vars
+        name: Set branch and mode
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "target_branch=${{ github.event.inputs.target_branch }}" >> "$GITHUB_OUTPUT"
+            echo "deployment_mode=${{ github.event.inputs.deployment_mode }}" >> "$GITHUB_OUTPUT"
           else
-            echo "⚠️  Service is in $SERVICE_STATUS state. Cannot deploy at this time."
-            echo "Please wait for the service to reach RUNNING state or check AWS Console for issues."
-            echo "Service ARN: $SERVICE_ARN"
-            exit 1
+            echo "target_branch=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            echo "deployment_mode=replace" >> "$GITHUB_OUTPUT"
           fi
-        else
-          echo "❌ App Runner service does not exist."
-          echo "💡 Use deployment_mode: 'apply' or 'recreate' to create infrastructure."
-          exit 1
-        fi
+          echo "aws_region=${{ secrets.AWS_REGION }}" >> "$GITHUB_OUTPUT"
+          echo "ecr_repository=data-viewer-dashboard" >> "$GITHUB_OUTPUT"
 
-    - name: Output deployment info
-      env:
-        ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-        IMAGE_TAG: ${{ env.IMAGE_TAG }}
-      run: |
-        echo "Image built and pushed: $ECR_REGISTRY/$ECR_REPOSITORY:${{ env.IMAGE_TAG }}"
-        
-        # Try to get service URL if service exists
-        SERVICE_ARN=$(aws apprunner list-services --query "ServiceSummaryList[?ServiceName=='$ECR_REPOSITORY'].ServiceArn" --output text 2>/dev/null || echo "")
-        if [ -n "$SERVICE_ARN" ]; then
-          SERVICE_URL=$(aws apprunner describe-service --service-arn $SERVICE_ARN --query "Service.ServiceUrl" --output text 2>/dev/null || echo "")
-          if [ -n "$SERVICE_URL" ]; then
-            echo "Dashboard URL: https://$SERVICE_URL"
-          fi
-        fi
+  deploy:
+    name: Run dashboard deployment pipeline
+    needs: prepare
+    uses: ./.github/workflows/dashboard-deploy.yml
+    with:
+      target-branch: ${{ needs.prepare.outputs.target_branch }}
+      deployment-mode: ${{ needs.prepare.outputs.deployment_mode }}
+      aws-region: ${{ needs.prepare.outputs.aws_region }}
+      ecr-repository: ${{ needs.prepare.outputs.ecr_repository }}
+    secrets:
+      aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      gcp-service-account-key: ${{ secrets.GCP_SERVICE_ACCOUNT_KEY }}
+      db-password: ${{ secrets.DB_PASSWORD }}

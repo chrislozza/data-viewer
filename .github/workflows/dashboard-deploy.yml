@@ -1,0 +1,170 @@
+name: Dashboard Deploy
+
+description: |
+  Reusable workflow that builds the dashboard image, pushes it to ECR, and
+  optionally manages App Runner infrastructure and deployments.
+
+on:
+  workflow_call:
+    inputs:
+      target-branch:
+        required: true
+        type: string
+        description: Git branch to checkout prior to building.
+      deployment-mode:
+        required: true
+        type: string
+        description: |
+          Deployment strategy to execute after the image build.
+          One of: replace (App Runner deployment only), apply (Terraform apply),
+          recreate (destroy + reapply infrastructure).
+      aws-region:
+        required: true
+        type: string
+        description: AWS region for ECR and App Runner resources.
+      ecr-repository:
+        required: true
+        type: string
+        description: Name of the ECR repository (and App Runner service).
+      dockerfile:
+        required: false
+        type: string
+        default: dashboard/deploy/Dockerfile
+        description: Dockerfile used for building the dashboard image.
+      build-context:
+        required: false
+        type: string
+        default: .
+        description: Build context passed to Docker.
+    secrets:
+      aws-access-key-id:
+        required: true
+      aws-secret-access-key:
+        required: true
+      gcp-service-account-key:
+        required: true
+      db-password:
+        required: false
+
+jobs:
+  build:
+    name: Build image
+    runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.publish.outputs.image }}
+      image-tag: ${{ steps.tags.outputs.image_tag }}
+      branch-tag: ${{ steps.tags.outputs.branch_tag }}
+      push-latest: ${{ steps.tags.outputs.push_latest }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.target-branch }}
+
+      - name: Determine image metadata
+        id: tags
+        shell: bash
+        env:
+          TARGET_BRANCH: ${{ inputs.target-branch }}
+        run: |
+          set -euo pipefail
+          BRANCH="$TARGET_BRANCH"
+          SAFE_BRANCH=$(echo "$BRANCH" | tr '[:upper:]' '[:lower:]' | sed -e 's/[^a-z0-9._-]/-/g')
+          if [ -z "$SAFE_BRANCH" ]; then
+            echo "Failed to derive a safe branch tag from '$BRANCH'" >&2
+            exit 1
+          fi
+
+          IMAGE_TAG=$(git rev-parse HEAD)
+
+          PUSH_LATEST=false
+          if [ "$SAFE_BRANCH" = "main" ]; then
+            PUSH_LATEST=true
+          fi
+
+          echo "Branch tag: $SAFE_BRANCH"
+          echo "Image tag:  $IMAGE_TAG"
+          echo "Push latest: $PUSH_LATEST"
+
+          echo "branch_tag=$SAFE_BRANCH" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "push_latest=$PUSH_LATEST" >> "$GITHUB_OUTPUT"
+
+      - name: Build and publish image
+        id: publish
+        uses: ./.github/actions/dashboard-build-image
+        with:
+          aws-region: ${{ inputs.aws-region }}
+          ecr-repository: ${{ inputs.ecr-repository }}
+          aws-access-key-id: ${{ secrets.aws-access-key-id }}
+          aws-secret-access-key: ${{ secrets.aws-secret-access-key }}
+          gcp-service-account-key: ${{ secrets.gcp-service-account-key }}
+          dockerfile: ${{ inputs.dockerfile }}
+          build-context: ${{ inputs.build-context }}
+          image-tag: ${{ steps.tags.outputs.image_tag }}
+          branch-tag: ${{ steps.tags.outputs.branch_tag }}
+          push-branch-tag: 'true'
+          push-latest: ${{ steps.tags.outputs.push_latest }}
+
+  replace:
+    name: Deploy image to App Runner
+    if: ${{ inputs.deployment-mode == 'replace' }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Trigger App Runner deployment
+        uses: ./.github/actions/dashboard-apprunner-deploy
+        with:
+          aws-region: ${{ inputs.aws-region }}
+          ecr-repository: ${{ inputs.ecr-repository }}
+          aws-access-key-id: ${{ secrets.aws-access-key-id }}
+          aws-secret-access-key: ${{ secrets.aws-secret-access-key }}
+          wait-for-completion: 'true'
+
+  apply:
+    name: Terraform apply & deploy
+    if: ${{ inputs.deployment-mode == 'apply' }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Apply Terraform changes
+        uses: ./.github/actions/dashboard-terraform
+        with:
+          aws-region: ${{ inputs.aws-region }}
+          aws-access-key-id: ${{ secrets.aws-access-key-id }}
+          aws-secret-access-key: ${{ secrets.aws-secret-access-key }}
+          db-password: ${{ secrets.db-password }}
+          operation: apply
+
+      - name: Deploy latest image to App Runner
+        uses: ./.github/actions/dashboard-apprunner-deploy
+        with:
+          aws-region: ${{ inputs.aws-region }}
+          ecr-repository: ${{ inputs.ecr-repository }}
+          aws-access-key-id: ${{ secrets.aws-access-key-id }}
+          aws-secret-access-key: ${{ secrets.aws-secret-access-key }}
+          wait-for-completion: 'true'
+
+  recreate:
+    name: Terraform recreate & deploy
+    if: ${{ inputs.deployment-mode == 'recreate' }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Recreate infrastructure
+        uses: ./.github/actions/dashboard-terraform
+        with:
+          aws-region: ${{ inputs.aws-region }}
+          aws-access-key-id: ${{ secrets.aws-access-key-id }}
+          aws-secret-access-key: ${{ secrets.aws-secret-access-key }}
+          db-password: ${{ secrets.db-password }}
+          operation: recreate
+
+      - name: Deploy latest image to App Runner
+        uses: ./.github/actions/dashboard-apprunner-deploy
+        with:
+          aws-region: ${{ inputs.aws-region }}
+          ecr-repository: ${{ inputs.ecr-repository }}
+          aws-access-key-id: ${{ secrets.aws-access-key-id }}
+          aws-secret-access-key: ${{ secrets.aws-secret-access-key }}
+          wait-for-completion: 'true'
