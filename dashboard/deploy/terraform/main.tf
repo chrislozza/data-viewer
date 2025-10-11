@@ -92,6 +92,15 @@ resource "aws_iam_role_policy" "apprunner_instance_policy" {
           "arn:aws:s3:::${var.config_bucket_name}",
           "arn:aws:s3:::${var.config_bucket_name}/*"
         ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "*"
       }
     ]
   })

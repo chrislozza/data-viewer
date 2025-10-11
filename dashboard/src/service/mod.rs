@@ -48,6 +48,9 @@ pub struct SimpleRequest {
     from: NaiveDate,
     to: NaiveDate,
 }
+pub(crate) async fn health() -> StatusCode {
+    StatusCode::OK
+}
 
 pub(crate) async fn symbols(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let query = r#"
