@@ -3,6 +3,7 @@
 
 aws_region = "us-east-1"
 app_name   = "data-viewer-dashboard"
+config_bucket_name = "trading-file-bucket"
 
 # Compute and scaling
 cpu             = "0.5 vCPU"
