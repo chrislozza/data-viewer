@@ -155,6 +155,24 @@ window.updatePnlChart = async function (start_date, end_date) {
         winRateElement.textContent = `${winRate.toFixed(1)}%`;
       }
 
+      // Calculate total fees
+      const totalFees = data.performance.response.reduce((sum, item) => {
+        return sum + parseFloat(item.fee || 0);
+      }, 0);
+
+      // Update total fees element
+      const totalFeesElement = document.getElementById('total-fees');
+      if (totalFeesElement) {
+        totalFeesElement.textContent = `$${totalFees.toFixed(2)}`;
+      }
+
+      // Calculate and update fees as percentage of total PnL
+      const feesPercentElement = totalFeesElement?.parentElement?.querySelector('.percent');
+      if (feesPercentElement && totalPnl !== 0) {
+        const feesPercent = Math.abs((totalFees / totalPnl) * 100);
+        feesPercentElement.textContent = `${feesPercent.toFixed(2)}%`;
+      }
+
       // Continue with chart update
       convertToPnLData(data.performance.response, start_date, end_date);
       return true;

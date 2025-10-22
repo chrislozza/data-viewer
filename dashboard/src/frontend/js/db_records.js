@@ -151,7 +151,8 @@ async function renderStrategyTable(containerId, symbol = null) {
         risk_loss_target: record.risk_loss_target || '',
         risk_loss_watermark: record.risk_loss_watermark || '',
         risk_stats_pnl: record.risk_stats_pnl || '',
-        risk_stats_roi: record.risk_stats_roi || ''
+        risk_stats_roi: record.risk_stats_roi || '',
+        risk_stats_fee: record.risk_stats_fee || ''
       };
     });
 
@@ -175,7 +176,8 @@ async function renderStrategyTable(containerId, symbol = null) {
         { title: "Loss Target", data: "risk_loss_target" },
         { title: "Watermark", data: "risk_loss_watermark" },
         { title: "PnL", data: "risk_stats_pnl" },
-        { title: "ROI", data: "risk_stats_roi" }
+        { title: "ROI", data: "risk_stats_roi" },
+        { title: "Fees", data: "risk_stats_fee" }
       ],
       order: [[4, 'desc']], // Sort by entry_time
       pageLength: 10,

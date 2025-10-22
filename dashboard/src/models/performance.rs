@@ -23,6 +23,7 @@ pub(crate) struct Performance {
     pub end_price: Decimal,
     pub pnl: Decimal,
     pub roi: Decimal,
+    pub fee: Decimal,
 }
 
 impl From<&Strategy> for Performance {
@@ -35,6 +36,7 @@ impl From<&Strategy> for Performance {
             end_price: strategy.risk.gain.current,
             pnl: strategy.risk.stats.pnl,
             roi: strategy.risk.stats.roi,
+            fee: strategy.risk.stats.fee,
         };
         info!("Performance: {}", serde_json::to_string(&perf).unwrap());
         perf

@@ -23,6 +23,8 @@ pub(crate) struct Loss {
 pub(crate) struct Stats {
     pub pnl: Decimal,
     pub roi: Decimal,
+    #[serde(default)]
+    pub fee: Decimal,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

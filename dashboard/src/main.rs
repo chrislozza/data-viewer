@@ -1,6 +1,5 @@
 use axum::{
     Router,
-    http::{Method},
     routing::get,
 };
 use clap::Parser;
@@ -87,6 +86,7 @@ async fn main() {
         .route("/strategy/{symbol}", get(service::strategy))
         .route("/universe", get(service::universe))
         .route("/performance", get(service::performance))
+        .route("/watermarks", get(service::watermarks))
         .with_state(state)
         .layer(cors)
         .fallback_service(ServeDir::new(frontend_path).append_index_html_on_directories(true));

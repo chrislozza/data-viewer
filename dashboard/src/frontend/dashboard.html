@@ -9,8 +9,10 @@
     <!-- jQuery -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-matrix@2.0.1"></script>
 
     <script src="./js/dashboard.js"></script>
+    <script src="./js/watermark_heatmap.js"></script>
 </head>
 
 <body>
@@ -100,8 +102,7 @@
                         <div class="dashboard-card large">
                             <h3>Watermark Hits</h3>
                             <div class="heatmap" id="watermark-heatmap">
-                                <!-- Heatmap will be generated here via JavaScript -->
-                                <div class="placeholder-text">Loading watermark data...</div>
+                                <canvas id="watermarkHeatmapChart"></canvas>
                             </div>
                         </div>
 
@@ -159,6 +160,11 @@
 
             // Call the update function from chart_pnl.js
             window.updatePnlChart(fromDate, toDate);
+            
+            // Update watermark heatmap
+            if (window.updateWatermarkHeatmap) {
+                window.updateWatermarkHeatmap(fromDate, toDate);
+            }
         }
 
         // Initialize chart with default period when page loads
