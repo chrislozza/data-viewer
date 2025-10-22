@@ -22,9 +22,9 @@ document.addEventListener('DOMContentLoaded', function () {
             type: 'time',
             time: {
               unit: 'day',
-              tooltipFormat: 'yyyy-MM-dd', // Changed YYYY to yyyy
+              tooltipFormat: 'MMM d, yyyy',
               displayFormats: {
-                day: 'yyyy-MM-dd' // Changed YYYY to yyyy
+                day: 'MMM d'
               }
             },
             title: {
@@ -50,16 +50,14 @@ document.addEventListener('DOMContentLoaded', function () {
                 // Get the original data point from the dataset's metadata
                 const dataPoint = context.dataset.originalData?.[context.dataIndex];
 
-                // Start with the basic PnL info
-                let tooltipText = [`${label}: $${value.toFixed(2)}`];
+                // Start with the cumulative PnL info
+                let tooltipText = [`${label} (Cumulative): $${value.toFixed(2)}`];
 
                 // Add additional information if available
                 if (dataPoint) {
-                  if (dataPoint.start_date) tooltipText.push(`Entry: ${dataPoint.start_date}`);
+                  if (dataPoint.pnl) tooltipText.push(`Trade PnL: $${parseFloat(dataPoint.pnl).toFixed(2)}`);
                   if (dataPoint.exit_date) tooltipText.push(`Exit: ${dataPoint.exit_date}`);
                   if (dataPoint.roi) tooltipText.push(`ROI: ${parseFloat(dataPoint.roi).toFixed(2)}%`);
-                  if (dataPoint.start_price) tooltipText.push(`Entry Price: $${parseFloat(dataPoint.start_price).toFixed(2)}`);
-                  if (dataPoint.end_price) tooltipText.push(`Exit Price: $${parseFloat(dataPoint.end_price).toFixed(2)}`);
                 }
 
                 return tooltipText;
@@ -229,36 +227,102 @@ function convertToPnLData(pnl_data, startDate, endDate) {
   const datasets = Object.keys(dataByStrategyAndDate).map(strategy => {
     const strategyData = dataByStrategyAndDate[strategy];
 
-    // Calculate cumulative PnL starting from 0
-    let cumulativePnL = 0;
-    const chartData = dateRange.map(date => {
-      // Get the daily PnL value as a number
-      const dailyPnL = parseFloat(strategyData[date]) || 0;
-      cumulativePnL += dailyPnL;
-      console.log(`Date: ${date}, Daily PnL: ${dailyPnL}, Cumulative: ${cumulativePnL}`);
-      return { x: date, y: cumulativePnL };
-    });
-
+    // Get only dates where this strategy had trades
     const dataPointsByDate = {};
     pnl_data.forEach(item => {
       if (item.strategy === strategy) {
         const dateKey = item.end_date || item.exit_date;
-        if (dateKey) {
+        // Skip invalid dates (1970-01-01 means null/invalid date)
+        if (dateKey && dateKey !== '1970-01-01') {
           dataPointsByDate[dateKey] = item;
         }
       }
     });
+
+    // Get sorted list of dates with trades for this strategy
+    const tradeDates = Object.keys(dataPointsByDate).sort();
+
+    console.log(`Strategy ${strategy}: Found ${tradeDates.length} trade dates:`, tradeDates);
+
+    // Skip strategies with no trades
+    if (tradeDates.length === 0) {
+      console.log(`Skipping strategy ${strategy} - no trades`);
+      return null;
+    }
+
+    // Calculate cumulative PnL only for dates with trades
+    let cumulativePnL = 0;
+    const chartData = [];
+    const originalData = [];
+
+    tradeDates.forEach(date => {
+      const dailyPnL = parseFloat(strategyData[date]) || 0;
+      cumulativePnL += dailyPnL;
+      console.log(`${strategy} - Date: ${date}, Daily PnL: ${dailyPnL}, Cumulative: ${cumulativePnL}`);
+      chartData.push({ x: date, y: cumulativePnL });
+      originalData.push(dataPointsByDate[date]);
+    });
+
+    console.log(`Strategy ${strategy}: Created ${chartData.length} data points`);
 
     return {
       label: strategy,
       data: chartData,
       fill: false,
       borderColor: getRandomColor(),
+      tension: 0.4, // Smooth curves
+      pointRadius: 4,
+      pointHoverRadius: 6,
       // Store original data for tooltips
-      originalData: dateRange.map(date => {
-        return dataPointsByDate[date] || null;
-      })
+      originalData: originalData
     };
+  }).filter(dataset => dataset !== null); // Remove null datasets (strategies with no trades)
+
+  // Calculate aggregate PnL - get all unique trade dates across all strategies
+  const allTradeDates = new Set();
+  pnl_data.forEach(item => {
+    const dateKey = item.end_date || item.exit_date;
+    // Skip invalid dates (1970-01-01 means null/invalid date)
+    if (dateKey && dateKey !== '1970-01-01') {
+      allTradeDates.add(dateKey);
+    }
+  });
+
+  // Sort trade dates
+  const sortedTradeDates = Array.from(allTradeDates).sort();
+
+  // Calculate cumulative aggregate PnL only for dates with trades
+  let cumulativeAggregate = 0;
+  const aggregateChartData = [];
+
+  sortedTradeDates.forEach(date => {
+    // Sum all strategies' PnL for this date
+    let dailyTotal = 0;
+    Object.keys(dataByStrategyAndDate).forEach(strategy => {
+      const strategyData = dataByStrategyAndDate[strategy];
+      dailyTotal += parseFloat(strategyData[date]) || 0;
+    });
+
+    cumulativeAggregate += dailyTotal;
+    aggregateChartData.push({ x: date, y: cumulativeAggregate });
+  });
+
+  // Add aggregate dataset to the beginning (so it appears first in legend)
+  datasets.unshift({
+    label: 'agg',
+    data: aggregateChartData,
+    fill: false,
+    borderColor: '#000000', // Black color for aggregate
+    borderWidth: 3, // Make it thicker to stand out
+    tension: 0.4, // Smooth curves
+    pointRadius: 5,
+    pointHoverRadius: 7,
+    originalData: aggregateChartData.map(() => null)
+  });
+
+  console.log('=== FINAL DATASETS ===');
+  datasets.forEach(ds => {
+    console.log(`Dataset: ${ds.label}, Points: ${ds.data.length}, First: ${JSON.stringify(ds.data[0])}, Last: ${JSON.stringify(ds.data[ds.data.length - 1])}`);
   });
 
   // Update the chart with the new datasets
