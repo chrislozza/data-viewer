@@ -11,6 +11,7 @@ pub(super) mod strategy;
 pub(super) mod symbol;
 pub(super) mod settings;
 pub(super) mod watermark;
+pub(super) mod metrics;
 
 fn get_alias(symbol: &str) -> String {
     if symbol.starts_with("/") {

@@ -86,6 +86,7 @@ async fn main() {
         .route("/strategy/{symbol}", get(service::strategy))
         .route("/universe", get(service::universe))
         .route("/performance", get(service::performance))
+        .route("/metrics", get(service::metrics))
         .route("/watermarks", get(service::watermarks))
         .with_state(state)
         .layer(cors)
