@@ -72,6 +72,8 @@ document.addEventListener('DOMContentLoaded', function () {
 
   initialisePnlChart();
 
+  fetchSymbolsIntoDropdown();
+
 });
 
 window.updatePnlChart = async function (start_date, end_date) {
@@ -365,4 +367,120 @@ function getRandomColor() {
     color += letters[Math.floor(Math.random() * 16)];
   }
   return color;
+}
+
+async function fetchSymbolsIntoDropdown() {
+  try {
+    const res = await fetch('/symbols');
+    if (!res.ok) return;
+    const body = await res.json();
+    const list = body?.symbols?.response || [];
+    const sel = document.getElementById('symbol');
+    if (!sel) return;
+    const current = sel.value;
+    while (sel.options.length > 1) sel.remove(1);
+    list.forEach((s) => {
+      const opt = document.createElement('option');
+      opt.value = s.name;
+      opt.textContent = s.name;
+      sel.appendChild(opt);
+    });
+    if (current && [...sel.options].some(o => o.value === current)) sel.value = current;
+  } catch (e) {
+    console.error('Failed to fetch symbols', e);
+  }
+}
+
+function getSelectedSymbol() {
+  const el = document.getElementById('symbol');
+  if (!el) return null;
+  const v = el.value;
+  return v === 'agg' ? null : v;
+}
+
+function formatCurrency(n, dp = 2) {
+  const sign = n < 0 ? '-' : '';
+  const v = Math.abs(n).toFixed(dp);
+  return `${sign}$${Number(v).toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp })}`;
+}
+
+function setText(id, text) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = text;
+}
+
+window.updateMetrics = async function (fromDate, toDate) {
+  try {
+    const params = new URLSearchParams();
+    params.append('from', fromDate);
+    params.append('to', toDate);
+    const symbol = getSelectedSymbol();
+    if (symbol) params.append('symbol', symbol);
+    const url = `/metrics?${params.toString()}`;
+    const res = await fetch(url, { method: 'GET' });
+    if (!res.ok) {
+      console.error('Metrics request failed', res.status);
+      return false;
+    }
+    const data = await res.json();
+    const metrics = data?.metrics;
+    if (!metrics) return false;
+
+    const dd = metrics.drawdown || {};
+    const sharpe = metrics.sharpe || {};
+    const exp = metrics.expectancy || {};
+    const rec = metrics.recovery || {};
+    const pf = metrics.profit_factor || {};
+
+    const ddPct = typeof dd.max_dd_pct_base === 'number' ? (-dd.max_dd_pct_base * 100) : 0;
+    setText('maxdd-pct', `${ddPct.toFixed(1)}%`);
+    const ddAbs = parseFloat(dd.max_dd_abs || '0');
+    setText('maxdd-abs', formatCurrency(-Math.abs(ddAbs), 0));
+    const recText = dd.recovery_days != null ? `recovered in ${dd.recovery_days}d` : 'not recovered';
+    setText('maxdd-recovery', recText);
+
+    if (sharpe.sharpe != null) {
+      setText('sharpe', Number(sharpe.sharpe).toFixed(2));
+      const mean = sharpe.mean_daily != null ? Number(sharpe.mean_daily).toFixed(4) : '0.0000';
+      const vol = sharpe.vol_daily != null ? Number(sharpe.vol_daily).toFixed(4) : '0.0000';
+      const n = sharpe.sample_days || 0;
+      setText('sharpe-subtext', `mean ${mean} | vol ${vol} | n=${n}`);
+    } else {
+      setText('sharpe', 'n/a');
+      setText('sharpe-subtext', 'mean/vol daily');
+    }
+
+    const expUsd = parseFloat(exp.expectancy_usd || '0');
+    setText('expectancy', formatCurrency(expUsd));
+    const wr = exp.win_rate != null ? (Number(exp.win_rate) * 100).toFixed(1) : '0.0';
+    const avgWin = parseFloat(exp.avg_win || '0');
+    const avgLoss = parseFloat(exp.avg_loss || '0');
+    setText('expectancy-subtext', `win ${wr}% | avg win ${formatCurrency(avgWin)} | avg loss ${formatCurrency(avgLoss)}`);
+
+    if (rec.recovery_factor != null) {
+      setText('recovery-factor', Number(rec.recovery_factor).toFixed(2));
+    } else {
+      setText('recovery-factor', 'n/a');
+    }
+    const netProfit = parseFloat(rec.net_profit || '0');
+    const refDd = parseFloat(rec.reference_max_dd || '0');
+    setText('recovery-subtext', `net ${formatCurrency(netProfit, 0)} | max DD ${formatCurrency(-Math.abs(refDd), 0)}`);
+
+    const grossP = parseFloat(pf.gross_profit || '0');
+    const grossL = parseFloat(pf.gross_loss || '0');
+    const trades = pf.trade_count || 0;
+    let pfText = 'n/a';
+    if (pf.profit_factor != null) {
+      pfText = Number(pf.profit_factor).toFixed(2);
+    } else if (grossL === 0 && grossP > 0 && trades > 0) {
+      pfText = '∞';
+    }
+    setText('profit-factor', pfText);
+    setText('profitfactor-subtext', `gross P ${formatCurrency(grossP, 0)} | gross L ${formatCurrency(grossL, 0)} | trades ${trades}`);
+
+    return true;
+  } catch (e) {
+    console.error('Error updating metrics', e);
+    return false;
+  }
 }

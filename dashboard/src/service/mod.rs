@@ -35,7 +35,23 @@ pub(crate) async fn metrics(
     let status = Status::Closed;
 
     let result: Result<Vec<Strategy>, AppError> = if let Some(sym) = &request.symbol {
-        let query = r#"
+        // Support alias symbols that represent futures underlyings (e.g., "/ES"),
+        // by matching all strategy rows with that prefix using LIKE.
+        let use_like = sym.starts_with('/') ;
+        let query = if use_like {
+            r#"
+        SELECT
+            *
+        FROM
+            strategy
+        WHERE
+            symbol LIKE $1
+        AND entry_time >= $2
+        AND exit_time <= $3
+        AND status = $4
+        "#
+        } else {
+            r#"
         SELECT
             *
         FROM
@@ -45,11 +61,18 @@ pub(crate) async fn metrics(
         AND entry_time >= $2
         AND exit_time <= $3
         AND status = $4
-        "#;
+        "#
+        };
 
-        sqlx::query_as::<_, Strategy>(query)
-            .bind(sym)
-            .bind(request.from)
+        let mut q = sqlx::query_as::<_, Strategy>(query);
+        if use_like {
+            let pattern = format!("{}%", sym);
+            q = q.bind(pattern);
+        } else {
+            q = q.bind(sym);
+        }
+
+        q.bind(request.from)
             .bind(request.to)
             .bind(Into::<i32>::into(status))
             .fetch_all(&state.db.pool)
