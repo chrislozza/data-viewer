@@ -72,8 +72,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
   initialisePnlChart();
 
-  fetchSymbolsIntoDropdown();
-
 });
 
 window.updatePnlChart = async function (start_date, end_date) {
@@ -369,34 +367,7 @@ function getRandomColor() {
   return color;
 }
 
-async function fetchSymbolsIntoDropdown() {
-  try {
-    const res = await fetch('/symbols');
-    if (!res.ok) return;
-    const body = await res.json();
-    const list = body?.symbols?.response || [];
-    const sel = document.getElementById('symbol');
-    if (!sel) return;
-    const current = sel.value;
-    while (sel.options.length > 1) sel.remove(1);
-    list.forEach((s) => {
-      const opt = document.createElement('option');
-      opt.value = s.name;
-      opt.textContent = s.name;
-      sel.appendChild(opt);
-    });
-    if (current && [...sel.options].some(o => o.value === current)) sel.value = current;
-  } catch (e) {
-    console.error('Failed to fetch symbols', e);
-  }
-}
-
-function getSelectedSymbol() {
-  const el = document.getElementById('symbol');
-  if (!el) return null;
-  const v = el.value;
-  return v === 'agg' ? null : v;
-}
+// No symbol dropdown; all metrics and charts are aggregate
 
 function formatCurrency(n, dp = 2) {
   const sign = n < 0 ? '-' : '';
@@ -414,8 +385,6 @@ window.updateMetrics = async function (fromDate, toDate) {
     const params = new URLSearchParams();
     params.append('from', fromDate);
     params.append('to', toDate);
-    const symbol = getSelectedSymbol();
-    if (symbol) params.append('symbol', symbol);
     const url = `/metrics?${params.toString()}`;
     const res = await fetch(url, { method: 'GET' });
     if (!res.ok) {
