@@ -38,7 +38,6 @@ impl From<&Strategy> for Performance {
             roi: strategy.risk.stats.roi,
             fee: strategy.risk.stats.fee,
         };
-        info!("Performance: {}", serde_json::to_string(&perf).unwrap());
         perf
     }
 }

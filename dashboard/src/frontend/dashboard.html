@@ -99,6 +99,56 @@
                             <p class="description">Profitable trades percentage</p>
                         </div>
 
+                        <!-- Max Drawdown Card -->
+                        <div class="dashboard-card">
+                            <h3>Max Drawdown</h3>
+                            <div class="metric">
+                                <span class="value" id="maxdd-pct">-0.0%</span>
+                            </div>
+                            <p class="description">
+                                <span id="maxdd-abs">$0</span>
+                                <span id="maxdd-recovery"></span>
+                            </p>
+                        </div>
+
+                        <!-- Sharpe Ratio Card -->
+                        <div class="dashboard-card">
+                            <h3>Sharpe Ratio</h3>
+                            <div class="metric">
+                                <span class="value" id="sharpe">n/a</span>
+                            </div>
+                            <p class="description">
+                                <span id="sharpe-subtext">mean/vol daily</span>
+                            </p>
+                        </div>
+
+                        <!-- Expectancy Card -->
+                        <div class="dashboard-card">
+                            <h3>Expectancy</h3>
+                            <div class="metric">
+                                <span class="value" id="expectancy">$0.00</span>
+                            </div>
+                            <p class="description" id="expectancy-subtext">win 0.0% | avg win $0.00 | avg loss $0.00</p>
+                        </div>
+
+                        <!-- Recovery Factor Card -->
+                        <div class="dashboard-card">
+                            <h3>Recovery Factor</h3>
+                            <div class="metric">
+                                <span class="value" id="recovery-factor">n/a</span>
+                            </div>
+                            <p class="description" id="recovery-subtext">net $0 | max DD $0</p>
+                        </div>
+
+                        <!-- Profit Factor Card -->
+                        <div class="dashboard-card">
+                            <h3>Profit Factor</h3>
+                            <div class="metric">
+                                <span class="value" id="profit-factor">n/a</span>
+                            </div>
+                            <p class="description" id="profitfactor-subtext">gross P $0 | gross L $0 | trades 0</p>
+                        </div>
+
                         <!-- Watermarks Heatmap Card -->
                         <div class="dashboard-card large">
                             <h3>Watermark Hits</h3>
@@ -161,6 +211,10 @@
 
             // Call the update function from chart_pnl.js
             window.updatePnlChart(fromDate, toDate);
+            // Call the metrics updater for cards
+            if (window.updateMetrics) {
+                window.updateMetrics(fromDate, toDate);
+            }
             
             // Update watermark heatmap
             if (window.updateWatermarkHeatmap) {

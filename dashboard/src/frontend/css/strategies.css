@@ -1,9 +1,18 @@
-/* Options area */
-.options-container {
-    background-color: #f9f9f9;
+
+/* Records page content styling only (layout shared via base.css) */
+
+.content-inner {
+    width: 100%;
+    max-width: none; /* use full available middle column width */
+    margin: 0 auto;
+}
+
+.records-card {
+    background: #f9f9f9;
     border: 1px solid #ddd;
     border-radius: 4px;
     padding: 1rem;
+    width: 100%;
 }
 
 #data-container {
@@ -19,6 +28,13 @@
 table.dataTable {
     width: 100% !important;
     margin: 0 auto;
+}
+
+/* Center all cell content and headers */
+table.dataTable th,
+table.dataTable td {
+    text-align: center;
+    vertical-align: middle;
 }
 
 /* Make table responsive on smaller screens */
