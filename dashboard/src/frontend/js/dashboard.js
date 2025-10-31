@@ -107,9 +107,11 @@ window.updatePnlChart = async function (start_date, end_date) {
 
     // Check if we have data before updating the chart
     if (data && data.performance && data.performance.response) {
-      // Calculate total PnL across all strategies
-      const totalPnl = data.performance.response.reduce((sum, item) => {
-        return sum + parseFloat(item.pnl || 0);
+      // Calculate total NET PnL across all strategies (pnl - fee)
+      const totalNetPnl = data.performance.response.reduce((sum, item) => {
+        const pnl = parseFloat(item.pnl || 0);
+        const fee = parseFloat(item.fee || 0);
+        return sum + (pnl - fee);
       }, 0);
 
       // Count winning trades
@@ -123,9 +125,6 @@ window.updatePnlChart = async function (start_date, end_date) {
 
       // Update dashboard elements
       const totalPnlElement = document.getElementById('total-pnl');
-      if (totalPnlElement) {
-        totalPnlElement.textContent = `$${totalPnl.toFixed(2)}`;
-      }
 
       // Update PnL trend percentage
       // This would require comparing with previous period data
@@ -136,7 +135,7 @@ window.updatePnlChart = async function (start_date, end_date) {
         pnlTrendElement.textContent = `${trendPercentage}%`;
 
         // Update the class based on positive or negative trend
-        if (totalPnl > 0) {
+        if (totalNetPnl > 0) {
           pnlTrendElement.className = 'trend positive';
         } else {
           pnlTrendElement.className = 'trend negative';
@@ -166,8 +165,8 @@ window.updatePnlChart = async function (start_date, end_date) {
 
       // Calculate and update fees as percentage of total PnL
       const feesPercentElement = totalFeesElement?.parentElement?.querySelector('.percent');
-      if (feesPercentElement && totalPnl !== 0) {
-        const feesPercent = Math.abs((totalFees / totalPnl) * 100);
+      if (feesPercentElement && totalNetPnl !== 0) {
+        const feesPercent = Math.abs((totalFees / totalNetPnl) * 100);
         feesPercentElement.textContent = `${feesPercent.toFixed(2)}%`;
       }
 
@@ -206,18 +205,20 @@ function convertToPnLData(pnl_data, startDate, endDate) {
     }
   });
 
-  // Sum PnL for each strategy on each date
+  // Sum NET PnL (pnl - fee) for each strategy on each date
   pnl_data.forEach(data => {
     // Use end_date instead of exit_date
     const dateToUse = data.end_date || data.exit_date;
 
     if (dateToUse) {
-      // Parse the PnL value directly as a number
-      const pnlValue = parseFloat(data.pnl);
-      console.log(`Adding PnL ${pnlValue} (original: ${data.pnl}) to strategy ${data.strategy} on ${dateToUse}`);
+      // Parse net PnL as a number
+      const pnl = parseFloat(data.pnl || 0);
+      const fee = parseFloat(data.fee || 0);
+      const netValue = pnl - fee;
+      console.log(`Adding NET PnL ${netValue} (pnl: ${pnl}, fee: ${fee}) to strategy ${data.strategy} on ${dateToUse}`);
 
-      // IMPORTANT: Set the value directly instead of adding to existing value
-      dataByStrategyAndDate[data.strategy][dateToUse] = pnlValue;
+      // Accumulate values for days with multiple trades in the same strategy
+      dataByStrategyAndDate[data.strategy][dateToUse] += netValue;
     }
   });
 
@@ -434,6 +435,9 @@ window.updateMetrics = async function (fromDate, toDate) {
     const netProfit = parseFloat(rec.net_profit || '0');
     const refDd = parseFloat(rec.reference_max_dd || '0');
     setText('recovery-subtext', `net ${formatCurrency(netProfit, 0)} | max DD ${formatCurrency(-Math.abs(refDd), 0)}`);
+
+    // Set Total PNL card from backend metrics net profit (single source of truth)
+    setText('total-pnl', formatCurrency(netProfit));
 
     const grossP = parseFloat(pf.gross_profit || '0');
     const grossL = parseFloat(pf.gross_loss || '0');

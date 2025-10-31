@@ -1,4 +1,5 @@
 use axum::{extract::Query, extract::State, response::IntoResponse};
+use tracing::info;
 use std::sync::Arc;
 
 use crate::{
@@ -21,8 +22,8 @@ pub(crate) async fn performance(
     FROM
         strategy
     WHERE
-        entry_time >= $1
-    AND exit_time <= $2
+        exit_time::date >= $1
+    AND exit_time::date <= $2
     AND status = $3
     "#;
 
@@ -40,10 +41,13 @@ pub(crate) async fn performance(
         .map_err(AppError::DatabaseError);
 
     match result {
-        Ok(rows) => PerformanceResponse {
-            response: rows.iter().map(Performance::from).collect(),
+        Ok(rows) => {
+            let perf = PerformanceResponse {
+                response: rows.iter().map(Performance::from).collect(),
+            };
+            info!("Performance: {}", serde_json::to_string(&perf).unwrap());
+            perf.into_response()
         }
-        .into_response(),
         Err(e) => e.into_response(),
     }
 }

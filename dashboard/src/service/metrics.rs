@@ -218,8 +218,8 @@ pub(crate) async fn metrics(
         FROM
             strategy
         WHERE
-            entry_time >= $1
-        AND exit_time <= $2
+            exit_time::date >= $1
+        AND exit_time::date <= $2
         AND status = $3
         "#;
 
