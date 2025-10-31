@@ -1,6 +1,46 @@
 // db_records.js
 
 // Function to fetch strategy data
+function formatLocal(ts) {
+  try {
+    if (!ts) return '';
+    // Parse as Date, render in LOCAL time and append local TZ short name
+    const d = new Date(ts);
+    if (!isNaN(d)) {
+      const pad = (n) => String(n).padStart(2, '0');
+      const y = d.getFullYear();
+      const mo = pad(d.getMonth() + 1);
+      const da = pad(d.getDate());
+      const hh = pad(d.getHours());
+      const mm = pad(d.getMinutes());
+      const ss = pad(d.getSeconds());
+      // Get local timezone short name using Intl
+      let tz = '';
+      const iana = (Intl.DateTimeFormat().resolvedOptions().timeZone) || undefined;
+      try {
+        const dtf = new Intl.DateTimeFormat(undefined, { timeZone: iana, timeZoneName: 'short' });
+        const parts = dtf.formatToParts(d);
+        const tzPart = parts.find(p => p.type === 'timeZoneName');
+        let label = tzPart ? tzPart.value : '';
+        // Special-case Europe/London to show BST/GMT explicitly
+        if (iana === 'Europe/London') {
+          const jan = new Date(d.getFullYear(), 0, 1);
+          const jul = new Date(d.getFullYear(), 6, 1);
+          const stdOffset = Math.max(jan.getTimezoneOffset(), jul.getTimezoneOffset());
+          const isDst = d.getTimezoneOffset() < stdOffset;
+          label = isDst ? 'BST' : 'GMT';
+        }
+        tz = label || '';
+      } catch(_) {}
+      const spacing = '\u00A0\u00A0';
+      const datePart = `${y}-${mo}-${da}`;
+      const timePart = `${hh}:${mm}:${ss}`;
+      const tzPartOut = tz ? `${spacing}${tz}` : '';
+      return `${datePart}${spacing}${timePart}${tzPartOut}`;
+    }
+  } catch (_) {}
+  return String(ts);
+}
 // Simplified fetchStrategyData function with better error handling
 // Function to flatten JSON fields in a strategy record
 async function fetchStrategyData(symbol = null) {
@@ -179,8 +219,8 @@ async function renderStrategyTable(containerId, symbol = null) {
         { title: "Status", data: "status" },
         { title: "Type", data: "meta_type" },
         { title: "Side", data: "risk_side" },
-        { title: "Entry Time", data: "entry_time" },
-        { title: "Exit Time", data: "exit_time" },
+        { title: "Entry Time", data: "entry_time", render: (data) => formatLocal(data) },
+        { title: "Exit Time", data: "exit_time", render: (data) => formatLocal(data) },
         { title: "Profit Target", data: "risk_gain_target" },
         { title: "Mark", data: "risk_gain_current" },
         { title: "Loss Target", data: "risk_loss_target" },

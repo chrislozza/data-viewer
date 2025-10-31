@@ -3,8 +3,8 @@
 
 .content-inner {
     width: 100%;
-    max-width: 1200px; /* responsive cap */
-    margin: 0 auto; /* center within the middle column */
+    max-width: none; /* use full available middle column width */
+    margin: 0 auto;
 }
 
 .records-card {
@@ -28,6 +28,13 @@
 table.dataTable {
     width: 100% !important;
     margin: 0 auto;
+}
+
+/* Center all cell content and headers */
+table.dataTable th,
+table.dataTable td {
+    text-align: center;
+    vertical-align: middle;
 }
 
 /* Make table responsive on smaller screens */
