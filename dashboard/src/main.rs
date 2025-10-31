@@ -10,11 +10,11 @@ use std::sync::Arc;
 use tokio::signal;
 use tokio_util::sync::CancellationToken;
 use tracing::info;
+use tower_http::cors::{Any, CorsLayer};
+use tower_http::services::ServeDir;
 
 mod models;
 mod service;
-use tower_http::cors::{Any, CorsLayer};
-use tower_http::services::ServeDir;
 
 const S3_STORED_SETTINGS: &str = "settings.json";
 
@@ -81,13 +81,13 @@ async fn main() {
         .allow_headers(Any);
 
     let app = Router::new()
-        .route("/health", get(service::health))
-        .route("/symbols", get(service::symbols))
-        .route("/strategy/{symbol}", get(service::strategy))
-        .route("/universe", get(service::universe))
-        .route("/performance", get(service::performance))
-        .route("/metrics", get(service::metrics))
-        .route("/watermarks", get(service::watermarks))
+        .route("/health", get(service::health::health))
+        .route("/symbols", get(service::symbols::symbols))
+        .route("/strategy/{symbol}", get(service::strategy::strategy))
+        .route("/universe", get(service::universe::universe))
+        .route("/performance", get(service::performance::performance))
+        .route("/metrics", get(service::metrics::metrics))
+        .route("/watermarks", get(service::watermarks::watermarks))
         .with_state(state)
         .layer(cors)
         .fallback_service(ServeDir::new(frontend_path).append_index_html_on_directories(true));

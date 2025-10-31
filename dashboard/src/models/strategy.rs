@@ -18,6 +18,7 @@ use super::AssetType;
 use super::PriceEffect;
 use super::Side;
 use super::riskdata::RiskData;
+use super::account::AccountDailySnapshot;
 
 #[derive(Debug, Clone, PartialEq, FromRow, Serialize, Deserialize)]
 pub(crate) struct Metadata {
@@ -127,6 +128,8 @@ pub(crate) struct Strategy {
     pub status: Status,
     pub meta: Metadata,
     pub risk: RiskData,
+    #[serde(default)]
+    pub account: AccountDailySnapshot,
 }
 
 impl<'r> sqlx::FromRow<'r, PgRow> for Strategy {
@@ -139,6 +142,7 @@ impl<'r> sqlx::FromRow<'r, PgRow> for Strategy {
             status: row.try_get("status")?,
             meta: row.try_get::<Json<Metadata>, _>("metadata")?.0,
             risk: row.try_get::<Json<RiskData>, _>("risk")?.0,
+            account: row.try_get::<Json<AccountDailySnapshot>, _>("account")?.0,
         })
     }
 }

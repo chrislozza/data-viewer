@@ -9,8 +9,6 @@ pub(crate) const BASE_CAPITAL: f64 = 5000.0;
 pub(crate) struct MetricsRequest {
     pub from: NaiveDate,
     pub to: NaiveDate,
-    #[serde(default)]
-    pub symbol: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Default, Clone)]
@@ -69,8 +67,6 @@ pub(crate) struct RecoveryFactorMetrics {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub(crate) struct MetricsResponseBody {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub symbol: Option<String>,
     pub from: NaiveDate,
     pub to: NaiveDate,
     pub drawdown: DrawdownMetrics,
