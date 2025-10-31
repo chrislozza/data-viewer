@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Strategies</title>
+    <title>Records</title>
     <link rel="stylesheet" href="./css/base.css">
     <link rel="stylesheet" href="./css/strategies.css">
 </head>
@@ -12,7 +12,7 @@
 <body>
     <!-- Header -->
     <header>
-        <h1>Trading Strategies</h1>
+        <h1>Trading Records</h1>
         <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
         <!-- Core DataTables -->
@@ -36,38 +36,38 @@
 
     <div class="container">
         <!-- Left Sidebar (same as index.html) -->
-        <div class="sibebar-container" , id="sidebar-container"></div>
+        <div id="sidebar-container"></div>
 
-        <!-- Middle Section (specific to strategies) -->
-        <div class="options-container">
-            <h3>Strategies</h3>
-            <div id="options">
-                <!-- Data container moved inside options -->
-                <div id="data-container">
-                    <!-- Date range controls -->
-                    <div class="date-controls">
-                        <div>
-                            <label for="min">Start Date:</label>
-                            <input type="text" id="min" name="min">
-                        </div>
-                        <div>
-                            <label for="max">End Date:</label>
-                            <input type="text" id="max" name="max">
-                        </div>
-                    </div>
+        <!-- Middle Section (specific to records) -->
+        <div class="main-content">
+            <div class="content-inner">
+                <div class="records-card">
+                    <h3>Records</h3>
+                    <div id="options">
+                        <!-- Data container moved inside options -->
+                        <div id="data-container">
+                            <!-- Date range controls -->
+                            <div class="date-controls">
+                                <div>
+                                    <label for="min">Start Date:</label>
+                                    <input type="text" id="min" name="min">
+                                </div>
+                                <div>
+                                    <label for="max">End Date:</label>
+                                    <input type="text" id="max" name="max">
+                                </div>
+                            </div>
 
-                    <!-- The table that DataTables will enhance -->
-                    <table id="strategy-table" class="display" style="width:100%">
-                        <thead>
-                            <!-- Headers will be dynamically generated -->
-                        </thead>
-                        <tbody>
-                            <!-- Data rows will be dynamically generated -->
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+                            <!-- The table will be injected by JS into #data-container -->
+                        </div>
+                    </div><!-- /#options -->
+                </div><!-- /.records-card -->
+            </div><!-- /.content-inner -->
+        </div><!-- /.main-content -->
+
+        <!-- Right Sidebar -->
+        <div class="sidebar right" id="right-sidebar"></div>
+    </div>
 
         <script type="module">
             import { renderStrategyTable } from './js/db_records.js';

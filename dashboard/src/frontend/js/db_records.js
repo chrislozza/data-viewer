@@ -47,8 +47,17 @@ async function fetchStrategyData(symbol = null) {
       throw new Error(`HTTP error! Status: ${response.status}, Details: ${errorDetails}`);
     }
 
-    // Parse JSON response
-    const data = await response.json();
+    // Parse JSON response and normalize to array
+    const raw = await response.json();
+    let data = [];
+    if (Array.isArray(raw)) {
+      data = raw;
+    } else if (raw && raw.strategies && Array.isArray(raw.strategies.response)) {
+      data = raw.strategies.response;
+    } else if (raw && Array.isArray(raw.response)) {
+      data = raw.response;
+    }
+
     console.log(`Successfully fetched ${data.length} records`);
     return data;
   } catch (error) {
@@ -103,6 +112,7 @@ function flattenRecord(record) {
   // Remove the original nested objects to avoid duplication
   delete flatRecord.risk;
   delete flatRecord.meta;
+  delete flatRecord.account;
 
   return flatRecord;
 }

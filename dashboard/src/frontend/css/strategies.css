@@ -1,9 +1,18 @@
-/* Options area */
-.options-container {
-    background-color: #f9f9f9;
+
+/* Records page content styling only (layout shared via base.css) */
+
+.content-inner {
+    width: 100%;
+    max-width: 1200px; /* responsive cap */
+    margin: 0 auto; /* center within the middle column */
+}
+
+.records-card {
+    background: #f9f9f9;
     border: 1px solid #ddd;
     border-radius: 4px;
     padding: 1rem;
+    width: 100%;
 }
 
 #data-container {
