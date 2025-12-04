@@ -31,34 +31,41 @@ function formatLocal(ts) {
           label = isDst ? 'BST' : 'GMT';
         }
         tz = label || '';
-      } catch(_) {}
+      } catch (_) { }
       const spacing = '\u00A0\u00A0';
       const datePart = `${y}-${mo}-${da}`;
       const timePart = `${hh}:${mm}:${ss}`;
       const tzPartOut = tz ? `${spacing}${tz}` : '';
       return `${datePart}${spacing}${timePart}${tzPartOut}`;
     }
-  } catch (_) {}
+  } catch (_) { }
   return String(ts);
 }
 // Simplified fetchStrategyData function with better error handling
 // Function to flatten JSON fields in a strategy record
-async function fetchStrategyData(symbol = null) {
+async function fetchStrategyData(symbol = null, fromDate = null, toDate = null) {
   try {
     // Determine the URL based on whether a symbol is provided
     const baseUrl = symbol ? `/strategy/${symbol}` : '/universe';
 
-    // Create default date range (last 90 days to today)
-    const today = new Date();
-    const ninetyDaysAgo = new Date();
-    ninetyDaysAgo.setDate(today.getDate() - 90);
+    let fromStr, toStr;
 
-    // Format dates as ISO strings (YYYY-MM-DD)
-    const fromDate = ninetyDaysAgo.toISOString().split('T')[0];
-    const toDate = today.toISOString().split('T')[0];
+    if (fromDate && toDate) {
+      fromStr = fromDate;
+      toStr = toDate;
+    } else {
+      // Create default date range (last 365 days to today)
+      const today = new Date();
+      const pastDate = new Date();
+      pastDate.setDate(today.getDate() - 365);
+
+      // Format dates as ISO strings (YYYY-MM-DD)
+      fromStr = pastDate.toISOString().split('T')[0];
+      toStr = today.toISOString().split('T')[0];
+    }
 
     // Build URL with required date parameters
-    const url = `${baseUrl}?from=${fromDate}&to=${toDate}`;
+    const url = `${baseUrl}?from=${fromStr}&to=${toStr}`;
 
     console.log(`Fetching data from: ${url}`);
 
@@ -159,10 +166,39 @@ function flattenRecord(record) {
 
 // Function to render the strategy table using DataTables
 // Function to render the strategy table using DataTables
-async function renderStrategyTable(containerId, symbol = null) {
+async function renderStrategyTable(containerId, symbol = null, fromDate = null, toDate = null) {
   try {
+    // Check for period select and use it if no specific dates provided
+    const periodSelect = document.getElementById('period-select');
+    if (periodSelect) {
+      // If no dates provided, calculate from dropdown
+      if (!fromDate || !toDate) {
+        const months = parseInt(periodSelect.value || "12"); // Default to 12 months if value missing
+        const today = new Date();
+        const start = new Date();
+        start.setMonth(today.getMonth() - months);
+
+        fromDate = start.toISOString().split('T')[0];
+        toDate = today.toISOString().split('T')[0];
+      }
+
+      // Bind change event (using jQuery off/on to prevent duplicate listeners)
+      $(periodSelect).off('change').on('change', function () {
+        const months = parseInt(this.value);
+        const today = new Date();
+        const start = new Date();
+        start.setMonth(today.getMonth() - months);
+
+        const newFrom = start.toISOString().split('T')[0];
+        const newTo = today.toISOString().split('T')[0];
+
+        // Reload table with new dates
+        renderStrategyTable(containerId, symbol, newFrom, newTo);
+      });
+    }
+
     // Fetch the data
-    const data = await fetchStrategyData(symbol);
+    const data = await fetchStrategyData(symbol, fromDate, toDate);
 
     if (!data || data.length === 0) {
       document.getElementById(containerId).innerHTML = '<p>No data available</p>';
@@ -238,15 +274,29 @@ async function renderStrategyTable(containerId, symbol = null) {
     // Remove the default search box
     $('.dataTables_filter').remove();
 
-    // Add our own search box
-    $('#data-container').prepend(`
-      <div class="custom-search" style="text-align: right; margin-bottom: 10px;">
-        <label>Search: <input type="text" id="custom-search-input" style="padding: 5px; border: 1px solid #ccc;"></label>
-      </div>
-    `);
+    // Clean up any existing length control in our custom toolbar (from previous renders)
+    $('.date-controls .dataTables_length').remove();
 
-    // Implement our own search function
-    $('#custom-search-input').on('keyup', function () {
+    // Move the new DataTables length control to our custom toolbar (after period selector)
+    const lengthControl = $('.dataTables_length');
+    // Add some margin for spacing
+    lengthControl.css({
+      'margin-left': '20px',
+      'margin-right': 'auto' // Push search box to the right if using flex
+    });
+    lengthControl.insertAfter('.date-control');
+
+    // Add our own search box to the date-controls container if it doesn't exist
+    if ($('#custom-search-input').length === 0) {
+      $('.date-controls').append(`
+        <div class="custom-search">
+          <label>Search: <input type="text" id="custom-search-input" style="padding: 5px; border: 1px solid #ccc;"></label>
+        </div>
+      `);
+    }
+
+    // Implement our own search function - unbind first to avoid duplicates/stale closures
+    $('#custom-search-input').off('keyup').on('keyup', function () {
       const searchTerm = this.value.toLowerCase();
 
       if (!searchTerm) {

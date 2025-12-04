@@ -44,20 +44,21 @@
                 <div class="records-card">
                     <h3>Records</h3>
                     <div id="options">
+                        <!-- Date range controls -->
+                        <div class="date-controls">
+                            <div class="date-control">
+                                <label for="period-select">Period:</label>
+                                <select id="period-select" class="period-select">
+                                    <option value="1">Last Month</option>
+                                    <option value="3">Last 3 Months</option>
+                                    <option value="6">Last 6 Months</option>
+                                    <option value="12" selected>Last Year</option>
+                                </select>
+                            </div>
+                        </div>
+
                         <!-- Data container moved inside options -->
                         <div id="data-container">
-                            <!-- Date range controls -->
-                            <div class="date-controls">
-                                <div>
-                                    <label for="min">Start Date:</label>
-                                    <input type="text" id="min" name="min">
-                                </div>
-                                <div>
-                                    <label for="max">End Date:</label>
-                                    <input type="text" id="max" name="max">
-                                </div>
-                            </div>
-
                             <!-- The table will be injected by JS into #data-container -->
                         </div>
                     </div><!-- /#options -->
@@ -69,18 +70,18 @@
         <div class="sidebar right" id="right-sidebar"></div>
     </div>
 
-        <script type="module">
-            import { renderStrategyTable } from './js/db_records.js';
+    <script type="module">
+        import { renderStrategyTable } from './js/db_records.js';
 
-            document.addEventListener('DOMContentLoaded', () => {
-                renderStrategyTable('data-container');
-            });
-        </script>
-        <script>
-            $(document).ready(function () {
-                $("#sidebar-container").load("./sidebar.html");
-            });
-        </script>
+        document.addEventListener('DOMContentLoaded', () => {
+            renderStrategyTable('data-container');
+        });
+    </script>
+    <script>
+        $(document).ready(function () {
+            $("#sidebar-container").load("./sidebar.html");
+        });
+    </script>
 
 </body>
 
