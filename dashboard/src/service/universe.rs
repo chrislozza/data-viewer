@@ -23,11 +23,12 @@ pub(crate) async fn universe(
     AND exit_time <= $2
     "#;
 
-    let result = sqlx::query_as::<_, Strategy>(query)
+    let result = sqlx::query(query)
         .bind(request.from)
         .bind(request.to)
         .fetch_all(&state.db.pool)
         .await
+        .map(|rows| rows.iter().filter_map(Strategy::from_row_safe).collect::<Vec<Strategy>>())
         .map_err(AppError::DatabaseError);
 
     match result {

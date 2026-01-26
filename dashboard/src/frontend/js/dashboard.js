@@ -101,7 +101,6 @@ window.updatePnlChart = async function (start_date, end_date) {
       throw new Error(`HTTP error! Status: ${response.status}, Details: ${errorDetails}`);
     }
 
-
     const data = await response.json();
     console.log("Received data:", data);
 
@@ -160,14 +159,22 @@ window.updatePnlChart = async function (start_date, end_date) {
       // Update total fees element
       const totalFeesElement = document.getElementById('total-fees');
       if (totalFeesElement) {
-        totalFeesElement.textContent = `$${totalFees.toFixed(2)}`;
+        if (totalFees > 0) {
+          totalFeesElement.textContent = `$${totalFees.toFixed(2)}`;
+        } else {
+          totalFeesElement.textContent = 'N/A';
+        }
       }
 
       // Calculate and update fees as percentage of total PnL
       const feesPercentElement = totalFeesElement?.parentElement?.querySelector('.percent');
-      if (feesPercentElement && totalNetPnl !== 0) {
-        const feesPercent = Math.abs((totalFees / totalNetPnl) * 100);
-        feesPercentElement.textContent = `${feesPercent.toFixed(2)}%`;
+      if (feesPercentElement) {
+        if (totalFees > 0 && totalNetPnl !== 0) {
+          const feesPercent = Math.abs((totalFees / totalNetPnl) * 100);
+          feesPercentElement.textContent = `${feesPercent.toFixed(2)}%`;
+        } else {
+          feesPercentElement.textContent = 'N/A';
+        }
       }
 
       // Continue with chart update
@@ -215,7 +222,6 @@ function convertToPnLData(pnl_data, startDate, endDate) {
       const pnl = parseFloat(data.pnl || 0);
       const fee = parseFloat(data.fee || 0);
       const netValue = pnl - fee;
-      console.log(`Adding NET PnL ${netValue} (pnl: ${pnl}, fee: ${fee}) to strategy ${data.strategy} on ${dateToUse}`);
 
       // Accumulate values for days with multiple trades in the same strategy
       dataByStrategyAndDate[data.strategy][dateToUse] += netValue;
@@ -310,7 +316,7 @@ function convertToPnLData(pnl_data, startDate, endDate) {
 
   // Add aggregate dataset to the beginning (so it appears first in legend)
   datasets.unshift({
-    label: 'agg',
+    label: 'Agg',
     data: aggregateChartData,
     fill: false,
     borderColor: '#000000', // Black color for aggregate
@@ -380,6 +386,53 @@ function setText(id, text) {
   const el = document.getElementById(id);
   if (el) el.textContent = text;
 }
+
+window.updateRecentActivity = async function () {
+  try {
+    const url = '/activities';
+    const res = await fetch(url, { method: 'GET' });
+    if (!res.ok) {
+      console.error('Activities request failed', res.status);
+      return false;
+    }
+    const data = await res.json();
+
+    const activityList = document.getElementById('recent-activity');
+    if (!activityList) return false;
+
+    // Clear existing activities
+    activityList.innerHTML = '';
+
+    // Add activities from the API
+    data.activities?.forEach(activity => {
+      const li = document.createElement('li');
+      li.className = 'activity-item';
+
+      // Format date (MM/DD)
+      const date = new Date(activity.timestamp);
+      const dateStr = `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')}`;
+
+      // Determine CSS class for positive/negative values
+      let detailClass = '';
+      if (activity.value !== null && activity.value !== undefined) {
+        detailClass = activity.value >= 0 ? 'positive' : 'negative';
+      }
+
+      li.innerHTML = `
+        <span class="time">${dateStr}</span>
+        <span class="event">${activity.description}</span>
+        <span class="detail ${detailClass}">${activity.details || ''}</span>
+      `;
+
+      activityList.appendChild(li);
+    });
+
+    return true;
+  } catch (e) {
+    console.error('Error updating recent activity', e);
+    return false;
+  }
+};
 
 window.updateMetrics = async function (fromDate, toDate) {
   try {

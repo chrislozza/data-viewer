@@ -3,7 +3,6 @@ use chrono::NaiveDate;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use tracing::info;
 
 use crate::models::{get_alias, strategy::Strategy};
 

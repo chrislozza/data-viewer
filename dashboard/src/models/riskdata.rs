@@ -23,7 +23,7 @@ pub(crate) struct Loss {
 pub(crate) struct Stats {
     pub pnl: Decimal,
     pub roi: Decimal,
-    #[serde(default)]
+    #[serde(default, alias = "fees")]
     pub fee: Decimal,
 }
 

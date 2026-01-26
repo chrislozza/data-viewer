@@ -223,12 +223,13 @@ pub(crate) async fn metrics(
         AND status = $3
         "#;
 
-        sqlx::query_as::<_, Strategy>(query)
+        sqlx::query(query)
             .bind(request.from)
             .bind(request.to)
             .bind(Into::<i32>::into(status))
             .fetch_all(&state.db.pool)
             .await
+            .map(|rows| rows.iter().filter_map(Strategy::from_row_safe).collect::<Vec<Strategy>>())
             .map_err(AppError::DatabaseError)
     };
 

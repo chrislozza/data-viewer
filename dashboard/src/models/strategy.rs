@@ -11,6 +11,7 @@ use sqlx::FromRow;
 use sqlx::Row;
 use sqlx::postgres::PgRow;
 use sqlx::types::{Json, Uuid};
+use tracing::error;
 
 use crate::models::get_alias;
 
@@ -23,6 +24,7 @@ use super::account::AccountDailySnapshot;
 #[derive(Debug, Clone, PartialEq, FromRow, Serialize, Deserialize)]
 pub(crate) struct Metadata {
     pub local_id: Uuid,
+    #[serde(alias = "symbol")]
     pub underlying: String,
     pub price_effect: PriceEffect,
     pub asset_type: AssetType,
@@ -30,6 +32,8 @@ pub(crate) struct Metadata {
     pub status: Status,
     pub open_price: Decimal,
     pub side: Side,
+    #[serde(default)]
+    pub quantity: Option<Decimal>,
 }
 
 #[derive(Debug, Copy, Clone, Default, PartialEq, Deserialize, Serialize)]
@@ -144,6 +148,22 @@ impl<'r> sqlx::FromRow<'r, PgRow> for Strategy {
             risk: row.try_get::<Json<RiskData>, _>("risk")?.0,
             account: row.try_get::<Json<AccountDailySnapshot>, _>("account")?.0,
         })
+    }
+}
+
+impl Strategy {
+    pub fn from_row_safe(row: &PgRow) -> Option<Self> {
+        match Self::from_row(row) {
+            Ok(s) => Some(s),
+            Err(e) => {
+                let id_info = match row.try_get::<Uuid, _>("local_id") {
+                    Ok(id) => format!("local_id={}", id),
+                    Err(_) => "local_id=unknown".to_string(),
+                };
+                error!("Failed to deserialize strategy ({}): {}", id_info, e);
+                None
+            }
+        }
     }
 }
 

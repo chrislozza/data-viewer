@@ -122,28 +122,28 @@ function flattenRecord(record) {
     // Handle risk.gain
     if (record.risk.gain && typeof record.risk.gain === 'object') {
       Object.entries(record.risk.gain).forEach(([key, value]) => {
-        flatRecord[`risk_gain_${key}`] = typeof value === 'object' ? JSON.stringify(value) : value;
+        flatRecord[`risk_gain_${key}`] = (value !== null && typeof value === 'object') ? JSON.stringify(value) : value;
       });
     }
 
     // Handle risk.loss
     if (record.risk.loss && typeof record.risk.loss === 'object') {
       Object.entries(record.risk.loss).forEach(([key, value]) => {
-        flatRecord[`risk_loss_${key}`] = typeof value === 'object' ? JSON.stringify(value) : value;
+        flatRecord[`risk_loss_${key}`] = (value !== null && typeof value === 'object') ? JSON.stringify(value) : value;
       });
     }
 
     // Handle risk.stats
     if (record.risk.stats && typeof record.risk.stats === 'object') {
       Object.entries(record.risk.stats).forEach(([key, value]) => {
-        flatRecord[`risk_stats_${key}`] = typeof value === 'object' ? JSON.stringify(value) : value;
+        flatRecord[`risk_stats_${key}`] = (value !== null && typeof value === 'object') ? JSON.stringify(value) : value;
       });
     }
 
     // Handle other top-level risk properties
     Object.entries(record.risk).forEach(([key, value]) => {
       if (!['gain', 'loss', 'stats'].includes(key)) {
-        flatRecord[`risk_${key}`] = typeof value === 'object' ? JSON.stringify(value) : value;
+        flatRecord[`risk_${key}`] = (value !== null && typeof value === 'object') ? JSON.stringify(value) : value;
       }
     });
   }
@@ -151,7 +151,7 @@ function flattenRecord(record) {
   // Flatten metadata if it exists
   if (record.meta && typeof record.meta === 'object') {
     Object.entries(record.meta).forEach(([key, value]) => {
-      flatRecord[`meta_${key}`] = typeof value === 'object' ? JSON.stringify(value) : value;
+      flatRecord[`meta_${key}`] = (value !== null && typeof value === 'object') ? JSON.stringify(value) : value;
     });
     console.log('flatRecord:', flatRecord);
   }
@@ -230,6 +230,7 @@ async function renderStrategyTable(containerId, symbol = null, fromDate = null, 
         status: record.status || '',
         meta_type: record.meta_type || '',
         risk_side: record.risk_side || '',
+        meta_quantity: record.meta_quantity || '',
         entry_time: record.entry_time || '',
         exit_time: record.exit_time || '',
         risk_gain_target: record.risk_gain_target || '',
@@ -255,6 +256,7 @@ async function renderStrategyTable(containerId, symbol = null, fromDate = null, 
         { title: "Status", data: "status" },
         { title: "Type", data: "meta_type" },
         { title: "Side", data: "risk_side" },
+        { title: "Qty", data: "meta_quantity", className: 'all' },
         { title: "Entry Time", data: "entry_time", render: (data) => formatLocal(data) },
         { title: "Exit Time", data: "exit_time", render: (data) => formatLocal(data) },
         { title: "Profit Target", data: "risk_gain_target" },
@@ -353,7 +355,6 @@ async function renderStrategyTable(containerId, symbol = null, fromDate = null, 
   } catch (error) {
     console.error('Error in renderStrategyTable:', error);
     document.getElementById(containerId).innerHTML = '<p>Error loading data</p>';
-
   }
 }
 

@@ -215,7 +215,7 @@
             if (window.updateMetrics) {
                 window.updateMetrics(fromDate, toDate);
             }
-            
+
             // Update watermark heatmap
             if (window.updateWatermarkHeatmap) {
                 window.updateWatermarkHeatmap(fromDate, toDate);
@@ -225,7 +225,13 @@
         // Initialize chart with default period when page loads
         document.addEventListener('DOMContentLoaded', function () {
             // Set default period (1 month)
-            setTimeout(() => updateChartPeriod(), 500);
+            setTimeout(() => {
+                updateChartPeriod();
+                // Update recent activity
+                if (window.updateRecentActivity) {
+                    window.updateRecentActivity();
+                }
+            }, 500);
         });
     </script>
 

@@ -88,6 +88,7 @@ async fn main() {
         .route("/performance", get(service::performance::performance))
         .route("/metrics", get(service::metrics::metrics))
         .route("/watermarks", get(service::watermarks::watermarks))
+        .route("/activities", get(service::activities::activities))
         .with_state(state)
         .layer(cors)
         .fallback_service(ServeDir::new(frontend_path).append_index_html_on_directories(true));
