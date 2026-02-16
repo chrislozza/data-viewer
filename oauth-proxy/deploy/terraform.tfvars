@@ -1,7 +1,7 @@
 aws_region           = "us-east-1"
 lambda_function_name = "oauth-proxy"
 lambda_handler       = "bootstrap"
-lambda_runtime       = "provided.al2"
+lambda_runtime       = "provided.al2023"
 lambda_package_path  = "./deployment-package.zip"
 api_name             = "oauth-proxy-api"
 api_route_key        = "ANY /oauth/{proxy+}"

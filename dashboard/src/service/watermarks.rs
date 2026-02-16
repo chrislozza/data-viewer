@@ -83,7 +83,7 @@ pub(crate) async fn watermarks(
 
             for (exit_time, watermark_f64) in row_data {
                 let days_from_start = (exit_time.date_naive() - year_start).num_days();
-                let week_number = (days_from_start / 7).max(0).min(51);
+                let week_number = (days_from_start / 7).clamp(0, 51);
 
                 let week_start = year_start + chrono::Duration::days(week_number * 7);
                 let time_label = format!("W{:02}-{}", week_number + 1, week_start.format("%m/%d"));

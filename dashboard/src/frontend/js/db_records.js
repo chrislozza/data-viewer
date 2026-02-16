@@ -136,7 +136,7 @@ function flattenRecord(record) {
     // Handle risk.stats
     if (record.risk.stats && typeof record.risk.stats === 'object') {
       Object.entries(record.risk.stats).forEach(([key, value]) => {
-        flatRecord[`risk_stats_${key}`] = (value !== null && typeof value === 'object') ? JSON.stringify(value) : value;
+        flatRecord[`risk_stats_${key}`] = value;
       });
     }
 
@@ -153,7 +153,31 @@ function flattenRecord(record) {
     Object.entries(record.meta).forEach(([key, value]) => {
       flatRecord[`meta_${key}`] = (value !== null && typeof value === 'object') ? JSON.stringify(value) : value;
     });
-    console.log('flatRecord:', flatRecord);
+  }
+
+  // Calculate unrealized P&L for open positions and set entry price
+  if (record.status === 1 || record.status === "Open") {
+    const entry = parseFloat(flatRecord.risk_gain_open) || 0;
+    const current = parseFloat(flatRecord.risk_gain_current) || 0;
+    const priceEffect = flatRecord.meta_price_effect;
+
+    if (entry > 0 && current > 0 && priceEffect) {
+      let unrealizedPnl = 0;
+      if (priceEffect === "Credit") {
+        // For credit spreads: profit when price decreases
+        unrealizedPnl = entry - current;
+      } else {
+        // For debit spreads: profit when price increases
+        unrealizedPnl = current - entry;
+      }
+      flatRecord.risk_stats_pnl = unrealizedPnl.toFixed(2);
+    }
+
+    // For open trades, ensure entry price is displayed
+    flatRecord.risk_gain_open = flatRecord.risk_gain_open || flatRecord.meta_open_price;
+  } else {
+    // For closed trades, use meta_open_price as the entry price
+    flatRecord.risk_gain_open = flatRecord.meta_open_price || flatRecord.risk_gain_open;
   }
 
   // Remove the original nested objects to avoid duplication
@@ -233,6 +257,7 @@ async function renderStrategyTable(containerId, symbol = null, fromDate = null, 
         meta_quantity: record.meta_quantity || '',
         entry_time: record.entry_time || '',
         exit_time: record.exit_time || '',
+        risk_gain_open: record.risk_gain_open || '',
         risk_gain_target: record.risk_gain_target || '',
         risk_gain_current: record.risk_gain_current || '',
         risk_loss_target: record.risk_loss_target || '',
@@ -259,11 +284,17 @@ async function renderStrategyTable(containerId, symbol = null, fromDate = null, 
         { title: "Qty", data: "meta_quantity", className: 'all' },
         { title: "Entry Time", data: "entry_time", render: (data) => formatLocal(data) },
         { title: "Exit Time", data: "exit_time", render: (data) => formatLocal(data) },
-        { title: "Profit Target", data: "risk_gain_target" },
+        { title: "Entry", data: "risk_gain_open", render: (data) => data || "0.00" },
         { title: "Mark", data: "risk_gain_current" },
         { title: "Loss Target", data: "risk_loss_target" },
         { title: "Watermark", data: "risk_loss_watermark" },
-        { title: "PnL", data: "risk_stats_pnl" },
+        {
+          title: "PnL", data: "risk_stats_pnl", render: (data, type, row) => {
+            const pnl = parseFloat(data) || 0;
+            const color = pnl >= 0 ? 'green' : 'red';
+            return `<span style="color: ${color}">${data}</span>`;
+          }
+        },
         { title: "ROI", data: "risk_stats_roi" },
         { title: "Fees", data: "risk_stats_fee" }
       ],

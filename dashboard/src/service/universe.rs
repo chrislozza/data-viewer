@@ -19,8 +19,12 @@ pub(crate) async fn universe(
     FROM
         strategy
     WHERE
-        entry_time >= $1
-    AND exit_time <= $2
+        (status = 1)
+        OR (
+            status = 2
+            AND exit_time::date >= $1
+            AND exit_time::date <= $2
+        )
     "#;
 
     let result = sqlx::query(query)

@@ -420,6 +420,8 @@ window.updateRecentActivity = async function () {
 
       li.innerHTML = `
         <span class="time">${dateStr}</span>
+        <span class="strategy-type">${activity.strategy_type || ''}</span>
+        <span class="symbol">${activity.symbol || ''}</span>
         <span class="event">${activity.description}</span>
         <span class="detail ${detailClass}">${activity.details || ''}</span>
       `;

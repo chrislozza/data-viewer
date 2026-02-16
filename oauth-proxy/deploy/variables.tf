@@ -19,7 +19,7 @@ variable "lambda_handler" {
 variable "lambda_runtime" {
   description = "Runtime for the Lambda function"
   type        = string
-  default     = "provided.al2"
+  default     = "provided.al2023"
 }
 
 variable "lambda_package_path" {

@@ -1,0 +1,10 @@
+    Finished `release` profile [optimized] target(s) in 0.60s
+     Running `/home/chris/projects/data-viewer/target/release/data-viewer --settings /home/chris/projects/data-viewer/.tmp/settings.json --frontend dashboard/src/frontend`
+[2m2026-01-30T22:02:01.836954Z[0m [32m INFO[0m [2mdata_viewer[0m[2m:[0m ___/********Data Viewer v1.0.0********\___
+[2m2026-01-30T22:02:01.837048Z[0m [32m INFO[0m [2mdata_viewer[0m[2m:[0m Settings: {"database":{"name":"manual-trader","port":5433,"host":"localhost","user":"manual-trader"},"logging":{"log_group":"trading-tools","log_stream":"dashboard","level":"info"}}
+[2m2026-01-30T22:02:01.870824Z[0m [32m INFO[0m [2maws_config::profile::credentials[0m[2m:[0m constructed abstract provider from config file [3mchain[0m[2m=[0mProfileChain { base: AccessKey(Credentials { provider_name: "ProfileFile", access_key_id: "AKIA5C3ETTRZCWJOYN7J", secret_access_key: "** redacted **", expires_after: "never" }), chain: [] }
+[2m2026-01-30T22:02:01.870977Z[0m [32m INFO[0m [2maws_config::profile::credentials[0m[2m:[0m loaded base credentials [3mcreds[0m[2m=[0mCredentials { provider_name: "ProfileFile", access_key_id: "AKIA5C3ETTRZCWJOYN7J", secret_access_key: "** redacted **", expires_after: "never" }
+
+thread 'main' (499305) panicked at dashboard/src/main.rs:98:62:
+called `Result::unwrap()` on an `Err` value: Os { code: 98, kind: AddrInUse, message: "Address already in use" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

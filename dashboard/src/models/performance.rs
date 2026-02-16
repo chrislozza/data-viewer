@@ -27,7 +27,7 @@ pub(crate) struct Performance {
 
 impl From<&Strategy> for Performance {
     fn from(strategy: &Strategy) -> Self {
-        let perf = Performance {
+        Performance {
             strategy: get_alias(&strategy.symbol),
             start_date: strategy.entry_time.date_naive(),
             exit_date: strategy.exit_time.date_naive(),
@@ -36,8 +36,7 @@ impl From<&Strategy> for Performance {
             pnl: strategy.risk.stats.pnl,
             roi: strategy.risk.stats.roi,
             fee: strategy.risk.stats.fee,
-        };
-        perf
+        }
     }
 }
 

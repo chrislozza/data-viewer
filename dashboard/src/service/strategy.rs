@@ -20,8 +20,14 @@ pub(crate) async fn strategy(
         strategy
     WHERE
         symbol = $1
-    AND entry_time >= $2
-    AND exit_time <= $3
+    AND (
+        (status = 1)
+        OR (
+            status = 2
+            AND exit_time::date >= $2
+            AND exit_time::date <= $3
+        )
+    )
     "#;
 
     let result = sqlx::query(query)
