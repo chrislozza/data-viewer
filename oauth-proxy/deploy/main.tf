@@ -8,6 +8,9 @@ resource "aws_lambda_function" "oauth_proxy" {
 
   role = aws_iam_role.lambda_exec.arn
 
+  timeout     = 30
+  memory_size = 256
+
   environment {
     variables = var.lambda_environment_variables
   }
