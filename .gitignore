@@ -19,3 +19,5 @@ target/
 .tmp/*
 **/.terraform/*
 **/.terraform.lock.hcl
+oauth-proxy/deploy/.terraform.tfstate.lock.info
+oauth-proxy/deploy/terraform.tfstate
