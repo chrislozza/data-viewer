@@ -9,6 +9,7 @@ const CLIENT_SECRET: &str = "CLIENT_SECRET";
 const CLIENT_ID_SB: &str = "CLIENT_ID_SB";
 const CLIENT_SECRET_SB: &str = "CLIENT_SECRET_SB";
 const REFRESH_TOKEN: &str = "REFRESH_TOKEN";
+const REFRESH_TOKEN_SB: &str = "REFRESH_TOKEN_SB";
 const API_KEY: &str = "OAUTH_API_KEY";
 
 pub(crate) enum Endpoint {
@@ -99,7 +100,11 @@ pub(crate) async fn get_secrets(req_client_id: &str, endpoint: Endpoint) -> Resu
         Endpoint::Live => get_parameters(CLIENT_SECRET, &client, true).await?,
         Endpoint::Sandbox => get_parameters(CLIENT_SECRET_SB, &client, true).await?,
     };
-    let refresh_token = get_parameters(REFRESH_TOKEN, &client, true).await?;
+    
+    let refresh_token = match endpoint {
+        Endpoint::Live => get_parameters(REFRESH_TOKEN, &client, true).await?,
+        Endpoint::Sandbox => get_parameters(REFRESH_TOKEN_SB, &client, true).await?,
+    };
 
     info!("Got secret items for client_id {req_client_id}");
 
